@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Node.js
+node_modules/
+.next/
+out/
+dist/
+.cache/
+
+# Environment files
+.env
+.env.*
+!.env.example
+key.json
+*.pem
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+database.sqlite
+
+# Uploads
+uploads/
+temp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Google Cloud SDK
+google-cloud-sdk/
+google-cloud-cli-*.tar.gz
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Build
+build/
+*.egg-info/
+
+# ngrok
+ngrok.yml
+
+# Firebase
+.firebase/
+firebase-debug.log

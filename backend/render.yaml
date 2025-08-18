@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: video-accounting-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    repo: https://github.com/YOUR_USERNAME/video-accounting-app
+    branch: main
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: GEMINI_API_KEY
+        sync: false  # 手動で設定
+      - key: UPLOAD_FOLDER
+        value: /tmp/uploads
+      - key: MAX_CONTENT_LENGTH
+        value: 104857600
+      - key: USE_VISION_API
+        value: false
+      - key: GCP_PROJECT_ID
+        value: clean-framework-468412-v2

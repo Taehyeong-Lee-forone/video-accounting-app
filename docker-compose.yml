@@ -1,0 +1,104 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: video-accounting-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-video_accounting}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: video-accounting-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: video-accounting-backend
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-admin}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-video_accounting}
+      REDIS_URL: redis://redis:6379
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/gcp-key.json
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      GCS_BUCKET: ${GCS_BUCKET}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-here}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./credentials:/app/credentials:ro
+      - uploads:/app/uploads
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - app-network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: video-accounting-frontend
+    restart: always
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: video-accounting-celery
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-admin}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-video_accounting}
+      REDIS_URL: redis://redis:6379
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/gcp-key.json
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      GCS_BUCKET: ${GCS_BUCKET}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    volumes:
+      - ./backend:/app
+      - ./credentials:/app/credentials:ro
+      - uploads:/app/uploads
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - app-network
+    command: celery -A celery_app worker --loglevel=info
+
+volumes:
+  postgres_data:
+  uploads:
+
+networks:
+  app-network:
+    driver: bridge

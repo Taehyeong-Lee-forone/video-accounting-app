@@ -1,0 +1,392 @@
+'use client'
+
+import { useRef, useState, useEffect } from 'react'
+import { PlayIcon, PauseIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid'
+
+interface Receipt {
+  id: number
+  vendor?: string
+  total?: number
+  best_frame?: {
+    id?: number
+    time_ms: number
+  }
+  best_frame_id?: number
+  is_manual?: boolean
+}
+
+interface CustomVideoPlayerProps {
+  url: string
+  receipts?: Receipt[]
+  onReceiptClick?: (receipt: Receipt) => void
+  onTimeUpdate?: (time: number) => void
+  onDuration?: (duration: number) => void
+}
+
+export default function CustomVideoPlayer({ 
+  url, 
+  receipts = [], 
+  onReceiptClick,
+  onTimeUpdate,
+  onDuration
+}: CustomVideoPlayerProps) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const progressBarRef = useRef<HTMLDivElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [volume, setVolume] = useState(1)
+  const [isMuted, setIsMuted] = useState(false)
+  const [showControls, setShowControls] = useState(true)
+  const [isDragging, setIsDragging] = useState(false)
+  const [hoveredReceipt, setHoveredReceipt] = useState<Receipt | null>(null)
+  const [hoveredTime, setHoveredTime] = useState<number | null>(null)
+  
+  const controlsTimeoutRef = useRef<NodeJS.Timeout>()
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    const handleLoadedMetadata = () => {
+      setDuration(video.duration)
+      onDuration?.(video.duration)
+    }
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(video.currentTime)
+      onTimeUpdate?.(video.currentTime)
+    }
+
+    video.addEventListener('loadedmetadata', handleLoadedMetadata)
+    video.addEventListener('timeupdate', handleTimeUpdate)
+
+    return () => {
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      video.removeEventListener('timeupdate', handleTimeUpdate)
+    }
+  }, [onDuration, onTimeUpdate])
+
+  const handlePlayPause = () => {
+    const video = videoRef.current
+    if (!video) return
+
+    if (isPlaying) {
+      video.pause()
+    } else {
+      video.play()
+    }
+    setIsPlaying(!isPlaying)
+  }
+
+  const handleProgressClick = (e: React.MouseEvent) => {
+    const video = videoRef.current
+    const progressBar = progressBarRef.current
+    if (!video || !progressBar) return
+
+    const rect = progressBar.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const percentage = x / rect.width
+    const newTime = percentage * duration
+    
+    video.currentTime = newTime
+    setCurrentTime(newTime)
+  }
+
+  const handleProgressMouseMove = (e: React.MouseEvent) => {
+    const progressBar = progressBarRef.current
+    if (!progressBar) return
+
+    const rect = progressBar.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const percentage = x / rect.width
+    const time = percentage * duration
+    
+    setHoveredTime(time)
+
+    // Check if hovering over a receipt
+    const hovered = receipts.find(r => {
+      if (!r.best_frame) return false
+      const receiptTime = r.best_frame.time_ms / 1000
+      return Math.abs(receiptTime - time) < 2 // within 2 seconds
+    })
+    setHoveredReceipt(hovered || null)
+  }
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const video = videoRef.current
+    if (!video) return
+
+    const newVolume = parseFloat(e.target.value)
+    setVolume(newVolume)
+    video.volume = newVolume
+    setIsMuted(newVolume === 0)
+  }
+
+  const toggleMute = () => {
+    const video = videoRef.current
+    if (!video) return
+
+    if (isMuted) {
+      video.volume = volume || 0.5
+      setIsMuted(false)
+    } else {
+      video.volume = 0
+      setIsMuted(true)
+    }
+  }
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const handleMouseMove = () => {
+    setShowControls(true)
+    
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current)
+    }
+    
+    controlsTimeoutRef.current = setTimeout(() => {
+      if (isPlaying) {
+        setShowControls(false)
+      }
+    }, 3000)
+  }
+
+
+
+  return (
+    <div 
+      className="relative bg-black rounded-lg overflow-hidden group w-full h-full"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => !isPlaying && setShowControls(true)}
+    >
+      <video
+        ref={videoRef}
+        src={url}
+        className="w-full h-full object-contain"
+        onClick={handlePlayPause}
+      />
+      
+      {/* Controls Overlay */}
+      <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent transition-opacity duration-300 z-10 ${
+        showControls ? 'opacity-100' : 'opacity-0'
+      }`}>
+        
+        {/* Progress Bar with Receipts */}
+        <div className="px-4 pb-2">
+          {/* Timeline container with increased height for better visibility */}
+          <div 
+            ref={progressBarRef}
+            className="relative h-2 bg-gray-700 rounded-full cursor-pointer group/progress"
+            onClick={handleProgressClick}
+            onMouseMove={handleProgressMouseMove}
+            onMouseLeave={() => {
+              setHoveredReceipt(null)
+              setHoveredTime(null)
+            }}
+          >
+            {/* Base progress track */}
+            <div className="absolute inset-0 bg-gray-600/50 rounded-full" />
+            
+            {/* Receipt segments background */}
+            {receipts.map((receipt, index) => {
+              if (!receipt.best_frame) return null
+              const position = (receipt.best_frame.time_ms / 1000 / duration) * 100
+              const nextReceipt = receipts[index + 1]
+              const segmentEnd = nextReceipt?.best_frame 
+                ? (nextReceipt.best_frame.time_ms / 1000 / duration) * 100
+                : 100
+              
+              return (
+                <div key={`segment-${receipt.id}`}>
+                  {/* Segment colored background */}
+                  <div
+                    className={`absolute top-0 h-full rounded-full transition-all cursor-pointer ${
+                      receipt.is_manual 
+                        ? 'bg-gradient-to-r from-green-500/30 to-green-400/20' 
+                        : 'bg-gradient-to-r from-blue-500/30 to-blue-400/20'
+                    } ${hoveredReceipt?.id === receipt.id ? '!from-opacity-60 !to-opacity-50' : ''}`}
+                    style={{ 
+                      left: `${position}%`,
+                      width: `${segmentEnd - position}%`
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const video = videoRef.current
+                      if (video && receipt.best_frame) {
+                        const targetTime = receipt.best_frame.time_ms / 1000
+                        video.currentTime = targetTime
+                        setCurrentTime(targetTime)
+                        // 領収書クリックコールバックは呼び出さない（フレーム移動のみ）
+                      }
+                    }}
+                  />
+                </div>
+              )
+            })}
+            
+            {/* Progress bar (played portion) */}
+            <div 
+              className="absolute left-0 top-0 h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full shadow-sm"
+              style={{ width: `${(currentTime / duration) * 100}%` }}
+            />
+            
+            {/* Receipt markers as dots */}
+            {receipts.map((receipt) => {
+              if (!receipt.best_frame) return null
+              const position = (receipt.best_frame.time_ms / 1000 / duration) * 100
+              const isHovered = hoveredReceipt?.id === receipt.id
+              
+              return (
+                <div key={`marker-${receipt.id}`}>
+                  {/* Marker dot with clickable area */}
+                  <div
+                    className={`absolute top-1/2 -translate-y-1/2 transition-all cursor-pointer z-10 hover:scale-150`}
+                    style={{ left: `${position}%`, transform: 'translate(-50%, -50%)' }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const video = videoRef.current
+                      if (video && receipt.best_frame) {
+                        const targetTime = receipt.best_frame.time_ms / 1000
+                        video.currentTime = targetTime
+                        setCurrentTime(targetTime)
+                        // 領収書クリックコールバックは呼び出さない（フレーム移動のみ）
+                      }
+                    }}
+                    title={`${receipt.vendor || '領収書'} - ${(receipt.best_frame.time_ms / 1000).toFixed(1)}秒`}
+                  >
+                    {/* Invisible larger click area */}
+                    <div className="absolute inset-0 -m-2"></div>
+                    {/* Visible marker */}
+                    <div className={`w-4 h-4 rounded-full border-2 border-white shadow-lg ${
+                      receipt.is_manual 
+                        ? 'bg-green-500 hover:bg-green-400' 
+                        : 'bg-blue-500 hover:bg-blue-400'
+                    } ${isHovered ? 'ring-4 ring-white/50 scale-125' : ''}`} />
+                  </div>
+                  
+                  {/* Vertical line indicator on hover */}
+                  {isHovered && (
+                    <div
+                      className="absolute -top-2 w-0.5 h-6 bg-white/60"
+                      style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
+                    />
+                  )}
+                </div>
+              )
+            })}
+            
+            {/* Hover position indicator */}
+            {hoveredTime !== null && !hoveredReceipt && (
+              <div 
+                className="absolute -top-1 w-0.5 h-4 bg-white/40"
+                style={{ left: `${(hoveredTime / duration) * 100}%`, transform: 'translateX(-50%)' }}
+              />
+            )}
+            
+            {/* Current position scrubber */}
+            <div 
+              className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg ring-2 ring-red-500 transition-opacity opacity-0 group-hover/progress:opacity-100"
+              style={{ left: `${(currentTime / duration) * 100}%`, transform: 'translate(-50%, -50%)' }}
+            />
+          </div>
+          
+          {/* Enhanced Hover Tooltip with thumbnail */}
+          {hoveredReceipt && hoveredTime !== null && (
+            <div 
+              className="absolute bottom-full mb-3 bg-gray-900 text-white rounded-lg shadow-xl pointer-events-none z-20"
+              style={{ left: `${(hoveredTime / duration) * 100}%`, transform: 'translateX(-50%)' }}
+            >
+              {/* Thumbnail if available */}
+              {hoveredReceipt.best_frame && (
+                <img 
+                  src={`http://localhost:5001/api/videos/frames/${hoveredReceipt.best_frame.id || hoveredReceipt.best_frame_id}/image`}
+                  className="w-32 h-24 object-cover rounded-t-lg"
+                  alt=""
+                  onError={(e) => { e.currentTarget.style.display = 'none' }}
+                />
+              )}
+              <div className="p-2">
+                <div className="font-semibold text-sm">{hoveredReceipt.vendor || '領収書'}</div>
+                <div className="text-xs text-gray-300">¥{hoveredReceipt.total?.toLocaleString() || 0}</div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {hoveredReceipt.is_manual ? '手動追加' : '自動検出'}
+                </div>
+              </div>
+              {/* Arrow pointing down */}
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
+            </div>
+          )}
+          
+          {/* Legend for receipt types */}
+          <div className="flex items-center gap-4 mt-2 text-xs text-white/60">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-blue-500" />
+              <span>自動検出</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <span>手動追加</span>
+            </div>
+          </div>
+        </div>
+        
+        {/* Control Buttons */}
+        <div className="flex items-center justify-between px-4 pb-3">
+          <div className="flex items-center gap-3">
+            {/* Play/Pause */}
+            <button 
+              onClick={handlePlayPause}
+              className="text-white hover:text-gray-300 transition-colors"
+            >
+              {isPlaying ? (
+                <PauseIcon className="h-6 w-6" />
+              ) : (
+                <PlayIcon className="h-6 w-6" />
+              )}
+            </button>
+            
+            {/* Volume */}
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={toggleMute}
+                className="text-white hover:text-gray-300 transition-colors"
+              >
+                {isMuted ? (
+                  <SpeakerXMarkIcon className="h-5 w-5" />
+                ) : (
+                  <SpeakerWaveIcon className="h-5 w-5" />
+                )}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={isMuted ? 0 : volume}
+                onChange={handleVolumeChange}
+                className="w-20 accent-white"
+              />
+            </div>
+            
+            {/* Time Display */}
+            <div className="text-white text-sm">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
+          </div>
+          
+          {/* Receipt Count */}
+          {receipts.length > 0 && (
+            <div className="text-white/70 text-xs">
+              領収書: {receipts.length}件
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
