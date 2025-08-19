@@ -21,6 +21,7 @@ interface CustomVideoPlayerProps {
   onReceiptClick?: (receipt: Receipt) => void
   onTimeUpdate?: (time: number) => void
   onDuration?: (duration: number) => void
+  videoRef?: React.MutableRefObject<HTMLVideoElement | null>
 }
 
 export default function CustomVideoPlayer({ 
@@ -28,9 +29,11 @@ export default function CustomVideoPlayer({
   receipts = [], 
   onReceiptClick,
   onTimeUpdate,
-  onDuration
+  onDuration,
+  videoRef: externalVideoRef
 }: CustomVideoPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const internalVideoRef = useRef<HTMLVideoElement>(null)
+  const videoRef = externalVideoRef || internalVideoRef
   const progressBarRef = useRef<HTMLDivElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -43,12 +46,98 @@ export default function CustomVideoPlayer({
   const [hoveredTime, setHoveredTime] = useState<number | null>(null)
   
   const controlsTimeoutRef = useRef<NodeJS.Timeout>()
+  const seekTimeoutRef = useRef<NodeJS.Timeout>()
+
+  // シーク機能を確実に実行する関数
+  const seekTo = (targetTime: number) => {
+    const video = videoRef.current
+    if (!video) {
+      console.error('Video element not found')
+      return
+    }
+
+    // readyStateの詳細チェック
+    // 0 = HAVE_NOTHING - メタデータなし
+    // 1 = HAVE_METADATA - メタデータのみ
+    // 2 = HAVE_CURRENT_DATA - 現在のフレームのみ
+    // 3 = HAVE_FUTURE_DATA - 少なくとも次のフレームあり
+    // 4 = HAVE_ENOUGH_DATA - 十分なデータあり
+    if (video.readyState < 3) {
+      console.warn(`Video not fully ready for seeking. readyState: ${video.readyState}, waiting...`)
+      
+      // readyStateが改善されるまで待機
+      const waitForReady = () => {
+        if (video.readyState >= 3) {
+          console.log('Video is now ready, proceeding with seek')
+          performSeek(targetTime)
+        } else {
+          setTimeout(waitForReady, 100)
+        }
+      }
+      waitForReady()
+      return
+    }
+
+    performSeek(targetTime)
+  }
+
+  const performSeek = (targetTime: number) => {
+    const video = videoRef.current
+    if (!video) return
+
+    console.log(`performSeek called with targetTime: ${targetTime}s, duration: ${video.duration}`)
+    
+    // 既存のタイムアウトをクリア
+    if (seekTimeoutRef.current) {
+      clearTimeout(seekTimeoutRef.current)
+    }
+
+    // 一時停止してからシーク（新規動画の場合に有効）
+    const wasPlaying = !video.paused
+    if (wasPlaying) {
+      video.pause()
+    }
+
+    // メソッド1: fastSeekが利用可能な場合は使用
+    if ('fastSeek' in video && typeof video.fastSeek === 'function') {
+      try {
+        (video as any).fastSeek(targetTime)
+        console.log('Used fastSeek')
+      } catch (e) {
+        console.error('fastSeek failed:', e)
+        video.currentTime = targetTime
+      }
+    } else {
+      // メソッド2: 通常のcurrentTime設定
+      video.currentTime = targetTime
+    }
+
+    // フォールバック: 少し待ってから再度設定
+    seekTimeoutRef.current = setTimeout(() => {
+      if (Math.abs(video.currentTime - targetTime) > 0.5) {
+        console.log(`Seek didn't work properly, retrying. Current: ${video.currentTime}, Target: ${targetTime}`)
+        video.currentTime = targetTime
+      }
+      
+      // 元々再生中だった場合は再生を再開
+      if (wasPlaying) {
+        video.play()
+      }
+    }, 100)
+  }
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
 
     const handleLoadedMetadata = () => {
+      console.log('Video loaded metadata:', {
+        duration: video.duration,
+        currentSrc: video.currentSrc,
+        readyState: video.readyState,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight
+      })
       setDuration(video.duration)
       onDuration?.(video.duration)
     }
@@ -58,12 +147,25 @@ export default function CustomVideoPlayer({
       onTimeUpdate?.(video.currentTime)
     }
 
+    const handleSeeked = () => {
+      console.log('Seek completed, currentTime:', video.currentTime)
+      setCurrentTime(video.currentTime)
+    }
+
+    const handleSeeking = () => {
+      console.log('Seeking to:', video.currentTime)
+    }
+
     video.addEventListener('loadedmetadata', handleLoadedMetadata)
     video.addEventListener('timeupdate', handleTimeUpdate)
+    video.addEventListener('seeked', handleSeeked)
+    video.addEventListener('seeking', handleSeeking)
 
     return () => {
       video.removeEventListener('loadedmetadata', handleLoadedMetadata)
       video.removeEventListener('timeupdate', handleTimeUpdate)
+      video.removeEventListener('seeked', handleSeeked)
+      video.removeEventListener('seeking', handleSeeking)
     }
   }, [onDuration, onTimeUpdate])
 
@@ -80,17 +182,24 @@ export default function CustomVideoPlayer({
   }
 
   const handleProgressClick = (e: React.MouseEvent) => {
-    const video = videoRef.current
     const progressBar = progressBarRef.current
-    if (!video || !progressBar) return
+    if (!progressBar) {
+      console.error('Progress bar not found')
+      return
+    }
+    
+    if (duration === 0) {
+      console.error('Duration is 0, cannot seek')
+      return
+    }
 
     const rect = progressBar.getBoundingClientRect()
     const x = e.clientX - rect.left
-    const percentage = x / rect.width
+    const percentage = Math.max(0, Math.min(1, x / rect.width))
     const newTime = percentage * duration
     
-    video.currentTime = newTime
-    setCurrentTime(newTime)
+    console.log(`Progress bar click: seeking to ${newTime}s (${percentage * 100}% of ${duration}s)`)
+    seekTo(newTime)
   }
 
   const handleProgressMouseMove = (e: React.MouseEvent) => {
@@ -169,6 +278,9 @@ export default function CustomVideoPlayer({
         src={url}
         className="w-full h-full object-contain"
         onClick={handlePlayPause}
+        preload="auto"
+        crossOrigin="anonymous"
+        playsInline
       />
       
       {/* Controls Overlay */}
@@ -216,13 +328,14 @@ export default function CustomVideoPlayer({
                     }}
                     onClick={(e) => {
                       e.stopPropagation()
-                      const video = videoRef.current
-                      if (video && receipt.best_frame) {
-                        const targetTime = receipt.best_frame.time_ms / 1000
-                        video.currentTime = targetTime
-                        setCurrentTime(targetTime)
-                        // 領収書クリックコールバックは呼び出さない（フレーム移動のみ）
+                      if (!receipt.best_frame || receipt.best_frame.time_ms === undefined) {
+                        console.error('Invalid marker data:', receipt)
+                        return
                       }
+                      
+                      const targetTime = receipt.best_frame.time_ms / 1000
+                      console.log(`Marker click: seeking to ${targetTime}s (${receipt.best_frame.time_ms}ms)`)
+                      seekTo(targetTime)
                     }}
                   />
                 </div>
@@ -249,13 +362,14 @@ export default function CustomVideoPlayer({
                     style={{ left: `${position}%`, transform: 'translate(-50%, -50%)' }}
                     onClick={(e) => {
                       e.stopPropagation()
-                      const video = videoRef.current
-                      if (video && receipt.best_frame) {
-                        const targetTime = receipt.best_frame.time_ms / 1000
-                        video.currentTime = targetTime
-                        setCurrentTime(targetTime)
-                        // 領収書クリックコールバックは呼び出さない（フレーム移動のみ）
+                      if (!receipt.best_frame || receipt.best_frame.time_ms === undefined) {
+                        console.error('Invalid marker data:', receipt)
+                        return
                       }
+                      
+                      const targetTime = receipt.best_frame.time_ms / 1000
+                      console.log(`Marker click: seeking to ${targetTime}s (${receipt.best_frame.time_ms}ms)`)
+                      seekTo(targetTime)
                     }}
                     title={`${receipt.vendor || '領収書'} - ${(receipt.best_frame.time_ms / 1000).toFixed(1)}秒`}
                   >

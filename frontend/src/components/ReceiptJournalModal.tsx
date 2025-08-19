@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { XMarkIcon, CheckIcon, XCircleIcon, PencilIcon, ChevronLeftIcon, ChevronRightIcon, CameraIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
-import { api } from '@/lib/api'
+import { api, API_URL } from '@/lib/api'
 
 interface ReceiptJournalModalProps {
   receipt: any
@@ -80,7 +80,7 @@ export default function ReceiptJournalModal({
         setLastReceiptId(receipt.id)
         if (receipt.best_frame?.time_ms !== undefined) {
           setCurrentFrameTime(receipt.best_frame.time_ms)
-          setCurrentFrameUrl(`http://localhost:5001/api/videos/frames/${receipt.best_frame.id}/image`)
+          setCurrentFrameUrl(`${API_URL}/api/videos/frames/${receipt.best_frame.id}/image`)
         }
       }
     }
@@ -135,7 +135,7 @@ export default function ReceiptJournalModal({
     
     // 新しいフレーム画像URL生成（キャッシュ無効化のためのタイムスタンプ追加）
     const timestamp = new Date().getTime()
-    const newFrameUrl = `http://localhost:5001/api/videos/${videoId}/frame-at-time?time_ms=${newTime}&t=${timestamp}`
+    const newFrameUrl = `${API_URL}/api/videos/${videoId}/frame-at-time?time_ms=${newTime}&t=${timestamp}`
     
     // フレーム時間とURLを更新
     setCurrentFrameTime(newTime)
@@ -209,7 +209,7 @@ export default function ReceiptJournalModal({
         if (response.data.success) {
           // 新しいフレームURLに更新（完全に新しいURL）
           const timestamp = new Date().getTime()
-          const newFrameUrl = `http://localhost:5001/api/videos/frames/${response.data.new_frame_id}/image?t=${timestamp}`
+          const newFrameUrl = `${API_URL}/api/videos/frames/${response.data.new_frame_id}/image?t=${timestamp}`
           
           console.log('Updating frame URL:', newFrameUrl)
           setCurrentFrameUrl(newFrameUrl)
@@ -263,7 +263,7 @@ export default function ReceiptJournalModal({
         if (response.data.success) {
           // 新しいフレームURLに更新（完全に新しいURL）
           const timestamp = new Date().getTime()
-          const newFrameUrl = `http://localhost:5001/api/videos/frames/${response.data.new_frame_id}/image?t=${timestamp}`
+          const newFrameUrl = `${API_URL}/api/videos/frames/${response.data.new_frame_id}/image?t=${timestamp}`
           
           console.log('Updating frame URL:', newFrameUrl)
           setCurrentFrameUrl(newFrameUrl)
@@ -409,7 +409,7 @@ export default function ReceiptJournalModal({
     const targetReceipt = localReceipts.find(r => r.id === targetReceiptId)
     if (targetReceipt?.best_frame) {
       setCurrentFrameTime(targetReceipt.best_frame.time_ms)
-      setCurrentFrameUrl(`http://localhost:5001/api/videos/frames/${targetReceipt.best_frame.id}/image`)
+      setCurrentFrameUrl(`${API_URL}/api/videos/frames/${targetReceipt.best_frame.id}/image`)
     }
     
     if (onReceiptChange) {
@@ -842,7 +842,7 @@ export default function ReceiptJournalModal({
               >
                 <img 
                   key={currentFrameUrl || receipt.best_frame?.id}  // key追加で強制再レンダリング
-                  src={currentFrameUrl || `http://localhost:5001/api/videos/frames/${receipt.best_frame.id}/image`}
+                  src={currentFrameUrl || `${API_URL}/api/videos/frames/${receipt.best_frame.id}/image`}
                   alt="Receipt"
                   className={`absolute ${imageViewMode === 'contain' ? 'object-contain' : 'object-cover'} ${isLoadingFrame ? 'opacity-50' : ''} ${zoomLevel > 1 ? 'cursor-move' : 'cursor-default'}`}
                   style={{
@@ -979,7 +979,7 @@ export default function ReceiptJournalModal({
                       setCurrentFrameTime(newTime)
                       setIsLoadingFrame(true)
                       const timestamp = new Date().getTime()
-                      const newFrameUrl = `http://localhost:5001/api/videos/${videoId}/frame-at-time?time_ms=${newTime}&t=${timestamp}`
+                      const newFrameUrl = `${API_URL}/api/videos/${videoId}/frame-at-time?time_ms=${newTime}&t=${timestamp}`
                       setCurrentFrameUrl(newFrameUrl)
                     }}
                   >

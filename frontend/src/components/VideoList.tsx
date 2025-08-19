@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { FilmIcon, CheckCircleIcon, ClockIcon, ExclamationCircleIcon, TrashIcon } from '@heroicons/react/24/outline'
-import { api } from '@/lib/api'
+import { api, API_URL } from '@/lib/api'
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { useVideoProgress } from '@/hooks/useVideoProgress'
@@ -116,7 +116,7 @@ export default function VideoList() {
               {/* サムネイル領域 */}
               <div className="relative aspect-video bg-gray-200">
                 <img 
-                  src={`http://localhost:5001/api/videos/${video.id}/thumbnail`}
+                  src={`${API_URL}/api/videos/${video.id}/thumbnail`}
                   alt={video.filename}
                   className="w-full h-full object-cover"
                   onError={(e) => {

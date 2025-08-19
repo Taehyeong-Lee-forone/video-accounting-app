@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useVideoDetail } from '@/hooks/useVideoDetail'
 import { useJournals } from '@/hooks/useJournals'
-import { api } from '@/lib/api'
+import { api, API_URL } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -33,33 +33,68 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   const handleJournalClick = (journal: any) => {
     setSelectedJournal(journal)
     
-    if (playerRef.current && journal.time_ms) {
-      const seconds = journal.time_ms / 1000
-      playerRef.current.seekTo(seconds)
+    if (!journal.time_ms) {
+      console.log('No timestamp for this journal')
+      return
     }
+    
+    if (!playerRef.current || !playerReady) {
+      console.error('Player not ready for seeking')
+      return
+    }
+    
+    const seconds = journal.time_ms / 1000
+    console.log(`Journal click: seeking to ${seconds}s (${journal.time_ms}ms)`)
+    
+    // seekToを2回呼ぶことで確実にシークする
+    playerRef.current.seekTo(seconds)
+    setTimeout(() => {
+      if (playerRef.current) {
+        playerRef.current.seekTo(seconds)
+      }
+    }, 50)
   }
 
   const handleReceiptClick = (receipt: any) => {
     setSelectedReceipt(receipt)
     
-    if (receipt.best_frame?.time_ms !== undefined) {
-      const seconds = receipt.best_frame.time_ms / 1000
-      
-      if (playerRef.current) {
-        try {
-          playerRef.current.seekTo(seconds, 'seconds')
-        } catch (e) {
-          console.error('Seek failed:', e)
+    if (receipt.best_frame?.time_ms === undefined) {
+      console.log('No timestamp for this receipt')
+      return
+    }
+    
+    if (!playerRef.current || !playerReady) {
+      console.error('Player not ready for seeking')
+      return
+    }
+    
+    const seconds = receipt.best_frame.time_ms / 1000
+    console.log(`Receipt click: seeking to ${seconds}s (${receipt.best_frame.time_ms}ms)`)
+    
+    try {
+      // seekToを2回呼ぶことで確実にシークする
+      playerRef.current.seekTo(seconds)
+      setTimeout(() => {
+        if (playerRef.current) {
+          playerRef.current.seekTo(seconds)
         }
-      }
+      }, 50)
+    } catch (e) {
+      console.error('Seek failed:', e)
     }
   }
 
   const handlePlayerReady = () => {
+    console.log('Player is ready')
     setPlayerReady(true)
-    if (playerRef.current) {
-      setVideoDuration(playerRef.current.getDuration())
-    }
+    // getDurationを少し遅らせて確実に取得
+    setTimeout(() => {
+      if (playerRef.current) {
+        const duration = playerRef.current.getDuration()
+        console.log('Video duration:', duration)
+        setVideoDuration(duration)
+      }
+    }, 100)
   }
 
   const handleProgress = (state: { played: number; playedSeconds: number }) => {
@@ -71,10 +106,25 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   }
 
   const handleMarkerClick = (timeMs: number) => {
-    if (playerRef.current) {
-      const seconds = timeMs / 1000
-      playerRef.current.seekTo(seconds)
+    if (!playerRef.current) {
+      console.error('Player ref not available')
+      return
     }
+    if (!playerReady) {
+      console.error('Player not ready')
+      return
+    }
+    
+    const seconds = timeMs / 1000
+    console.log(`Marker click: seeking to ${seconds}s (${timeMs}ms)`)
+    
+    // seekToを2回呼ぶことで確実にシークする
+    playerRef.current.seekTo(seconds)
+    setTimeout(() => {
+      if (playerRef.current) {
+        playerRef.current.seekTo(seconds)
+      }
+    }, 50)
   }
 
   const handleAnalyzeCurrentFrame = async () => {
@@ -267,13 +317,24 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
             <div className="relative">
               <ReactPlayer
                 ref={playerRef}
-                url={video.local_path ? `http://localhost:5001/${video.local_path}` : ''}
+                url={video.local_path ? `${API_URL}/${video.local_path}` : ''}
                 controls
                 width="100%"
                 height="400px"
                 onReady={handlePlayerReady}
                 onProgress={handleProgress}
                 onDuration={handleDuration}
+                progressInterval={100}
+                playing={false}
+                pip={false}
+                config={{
+                  file: {
+                    attributes: {
+                      controlsList: 'nodownload',
+                      preload: 'metadata'
+                    }
+                  }
+                }}
               />
             </div>
             
@@ -284,13 +345,25 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                 <div 
                   className="relative bg-gray-200 h-8 rounded-lg overflow-hidden cursor-pointer"
                   onClick={(e) => {
+                    if (!playerRef.current || !playerReady || videoDuration === 0) {
+                      console.error('Cannot seek: player not ready or duration is 0')
+                      return
+                    }
+                    
                     const rect = e.currentTarget.getBoundingClientRect()
                     const x = e.clientX - rect.left
-                    const percentage = x / rect.width
+                    const percentage = Math.max(0, Math.min(1, x / rect.width))
                     const targetTime = percentage * videoDuration
-                    if (playerRef.current) {
-                      playerRef.current.seekTo(targetTime)
-                    }
+                    
+                    console.log(`Timeline click: seeking to ${targetTime}s (${percentage * 100}%)`)
+                    
+                    // seekToを2回呼ぶことで確実にシークする
+                    playerRef.current.seekTo(targetTime)
+                    setTimeout(() => {
+                      if (playerRef.current) {
+                        playerRef.current.seekTo(targetTime)
+                      }
+                    }, 50)
                   }}
                 >
                   <div 
@@ -447,7 +520,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                     <div className="mb-4 flex items-start gap-4">
                       <div className="flex-shrink-0">
                         <img 
-                          src={`http://localhost:5001/api/videos/frames/${receipt.best_frame.id}/image`}
+                          src={`${API_URL}/api/videos/frames/${receipt.best_frame.id}/image`}
                           alt={`Frame at ${receipt.best_frame.time_ms}ms`}
                           className="w-32 h-24 object-cover rounded border"
                         />

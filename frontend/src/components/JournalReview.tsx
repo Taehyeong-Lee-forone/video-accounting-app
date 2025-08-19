@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useVideoDetail } from '@/hooks/useVideoDetail'
 import { useJournals } from '@/hooks/useJournals'
-import { api } from '@/lib/api'
+import { api, API_URL } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -487,7 +487,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
               
               <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
                 <CustomVideoPlayer
-                  url={video.local_path ? `http://localhost:5001/${video.local_path}` : ''}
+                  url={video.local_path ? `${API_URL}/${video.local_path}` : ''}
                   receipts={video.receipts || []}
                   onReceiptClick={handleReceiptClick}
                   onTimeUpdate={(time) => setCurrentTime(time)}
