@@ -67,10 +67,22 @@ class Frame(Base):
     contrast = Column(Float)
     ocr_text = Column(Text)
     phash = Column(String(64))
+    dhash = Column(String(64))  # difference hash for additional comparison
     is_best = Column(Boolean, default=False)
     is_manual = Column(Boolean, default=False)  # 手動追加フラグ
     ocr_boxes_json = Column(Text)  # JSON string of bounding boxes
     frame_score = Column(Float)
+    # 新しい追跡フィールド
+    doc_quad_json = Column(Text)  # JSON string of document quadrilateral [[x,y], [x,y], ...]
+    sharpness_score = Column(Float)
+    doc_area_score = Column(Float)
+    perspective_score = Column(Float)
+    exposure_score = Column(Float)
+    stability_score = Column(Float)
+    glare_penalty = Column(Float)
+    textness_score = Column(Float)
+    total_quality_score = Column(Float)  # Weighted combination of all scores
+    motion_score = Column(Float)  # Motion/instability from sampling
     frame_path = Column(String(500))
     
     video = relationship("Video", back_populates="frames")

@@ -6,7 +6,7 @@ export function useVideos() {
   const query = useQuery({
     queryKey: ['videos'],
     queryFn: async () => {
-      const response = await api.get('/api/videos/')
+      const response = await api.get('/videos/')
       return response.data
     },
     // 1秒ごとに必ずリフレッシュ

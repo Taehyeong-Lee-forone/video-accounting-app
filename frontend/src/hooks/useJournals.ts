@@ -6,7 +6,7 @@ export function useJournals(videoId?: number) {
     queryKey: ['journals', videoId],
     queryFn: async () => {
       const params = videoId ? `?video_id=${videoId}` : ''
-      const response = await api.get(`/api/journals${params}`)
+      const response = await api.get(`/journals${params}`)
       return response.data
     },
   })

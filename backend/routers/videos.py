@@ -14,6 +14,7 @@ from schemas import VideoResponse, VideoDetailResponse, VideoAnalyzeRequest, Fra
 from services.video_intelligence import VideoAnalyzer
 from services.journal_generator import JournalGenerator
 from celery_app import analyze_video_task
+from video_processing import select_receipt_frames
 
 logger = logging.getLogger(__name__)
 
@@ -129,115 +130,218 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
             db.refresh(video)
             logger.info(f"Video {video_id}: {progress}% - {message}")
         
-        update_progress(10, "スマートフレーム抽出中...")
+        update_progress(10, "高品質フレーム選択中...")
         
-        # スマートフレーム抽出を使用 - より密にサンプリング
-        from services.smart_frame_extractor import SmartFrameExtractor
-        smart_extractor = SmartFrameExtractor()
-        # 毎秒4フレームにサンプリング増加（以前：2fps）
-        frames_data = smart_extractor.extract_smart_frames(video.local_path, sample_fps=4)
+        # 新しい高品質フレーム選択システムを使用
+        logger.info("Using new high-quality frame selection system")
         
-        # スマートフレーム抽出が失敗した場合、通常のフレーム抽出にフォールバック
-        if not frames_data:
-            logger.warning("Smart frame extraction returned no frames, falling back to regular extraction")
+        # ビデオ時間から目標フレーム数を計算
+        import cv2
+        cap = cv2.VideoCapture(video.local_path)
+        fps_video = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration_seconds = total_frames / fps_video if fps_video > 0 else 0
+        cap.release()
+        
+        # 目標レシート数を計算（約2.5秒ごとに1枚、最小7枚、最大15枚）
+        target_min = max(7, int(duration_seconds / 3.0))
+        target_max = min(15, max(target_min + 3, int(duration_seconds / 2.0)))
+        logger.info(f"Video duration: {duration_seconds:.1f}s, target frames: {target_min}-{target_max}")
+        
+        # 新しいシステムで高品質フレームを選択（OCR込み）
+        try:
+            selected_frames_new = select_receipt_frames(
+                video_path=video.local_path,
+                target_min=target_min,
+                target_max=target_max
+            )
+            logger.info(f"Selected {len(selected_frames_new)} high-quality frames")
+        except Exception as e:
+            logger.error(f"New frame selection failed: {e}, falling back to basic extraction")
+            # フォールバック: 基本的なフレーム抽出
             frames_data = analyzer.extract_frames(video.local_path, fps)
-        
-        update_progress(30, "OCR処理中...")
-        
-        # Video Intelligence API実行
-        ocr_result = await analyzer.analyze_video_text(video.local_path)
+            selected_frames_new = []
         
         update_progress(50, "フレームデータ保存中...")
         
-        # ビデオ時間ベースの均等分割アプローチ
-        import cv2
-        cap = cv2.VideoCapture(video.local_path)
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        duration_seconds = total_frames / fps if fps > 0 else 0
-        cap.release()
-        
-        # 目標レシート数を計算（約2.5秒ごとに1枚、最小7枚）
-        target_receipts = max(7, min(15, int(duration_seconds / 2.5)))
-        logger.info(f"Video duration: {duration_seconds:.1f}s, target receipts: {target_receipts}")
-        
-        # 改善されたフレーム分散選択 - 全体均等分割
-        def distribute_frames_intelligently(frames_data, target_count):
-            """ビデオ全体を均等にカバーするインテリジェントフレーム選択"""
-            if not frames_data:
-                return []
+        # 新しいシステムを使用している場合は、古い処理をスキップ
+        if selected_frames_new:
+            update_progress(70, "レシートデータ処理中...")
+            receipts_found = 0
             
-            # スマートフレーム抽出器を使用した場合、すでに最適化済み
-            # すべてのフレームをそのまま使用
-            if len(frames_data) <= 30:
-                logger.info(f"Using all {len(frames_data)} smart-extracted frames without filtering")
-                return frames_data
-            
-            # 時間順にソート
-            frames_sorted = sorted(frames_data, key=lambda x: x['time_ms'])
-            min_time = frames_sorted[0]['time_ms']
-            max_time = frames_sorted[-1]['time_ms']
-            duration = max_time - min_time
-            
-            selected_frames = []
-            used_times = set()
-            
-            # 全区間を均等分割（最初から最後まで）
-            if duration > 0 and target_count > 0:
-                # 均等間隔を計算
-                interval = duration / target_count
+            # 新しいシステムの結果をデータベースに保存
+            for idx, selected_frame in enumerate(selected_frames_new):
+                # Frameオブジェクトを作成
+                frame_obj = Frame(
+                    video_id=video.id,
+                    time_ms=int(selected_frame.time_s * 1000),
+                    frame_path=selected_frame.crop_path,
+                    ocr_text=selected_frame.ocr_text,
+                    frame_score=selected_frame.score,
+                    is_best=True
+                )
+                db.add(frame_obj)
+                db.flush()
                 
-                for i in range(target_count):
-                    # 各区間の中心時間
-                    target_time = min_time + (i * interval) + (interval / 2)
+                # レシートデータがある場合は保存
+                if selected_frame.metadata and selected_frame.metadata.get('receipt_info'):
+                    receipt_info = selected_frame.metadata['receipt_info']
                     
-                    # ターゲット時間付近のフレームを探す（±interval/2の範囲）
-                    nearby_frames = [
-                        f for f in frames_sorted 
-                        if abs(f['time_ms'] - target_time) <= interval/2
-                        and f['time_ms'] not in used_times
-                    ]
+                    # 有効なレシートデータか確認
+                    if receipt_info and receipt_info.get('vendor'):
+                        from datetime import datetime
+                        
+                        # 日付処理
+                        issue_date = receipt_info.get('date')
+                        if issue_date and isinstance(issue_date, str):
+                            try:
+                                issue_date = datetime.strptime(issue_date, '%Y-%m-%d')
+                            except:
+                                issue_date = datetime.now()
+                        elif not issue_date:
+                            issue_date = datetime.now()
+                        
+                        # レシートを保存
+                        total_amount = receipt_info.get('total', 0) or 0
+                        receipt = Receipt(
+                            video_id=video.id,
+                            best_frame_id=frame_obj.id,
+                            vendor=receipt_info.get('vendor', 'Unknown'),
+                            document_type='レシート',
+                            issue_date=issue_date,
+                            currency=receipt_info.get('currency', 'JPY'),
+                            total=total_amount,
+                            subtotal=receipt_info.get('subtotal', total_amount * 0.9),
+                            tax=receipt_info.get('tax', total_amount * 0.1),
+                            tax_rate=0.10,
+                            payment_method='現金',
+                            is_manual=False
+                        )
+                        db.add(receipt)
+                        receipts_found += 1
+                        logger.info(f"Saved receipt {receipts_found}: {receipt_info.get('vendor')} - {receipt_info.get('total')}")
+                
+                update_progress(70 + (20 * idx // len(selected_frames_new)), f"レシート {idx+1}/{len(selected_frames_new)} 処理中...")
+            
+            db.commit()
+            logger.info(f"Saved {receipts_found} receipts from new system")
+            
+            # 仕訳データ生成
+            update_progress(90, "仕訳データ生成中...")
+            generator = JournalGenerator(db)
+            receipts = db.query(Receipt).filter(Receipt.video_id == video.id).all()
+            
+            for receipt in receipts:
+                journal_entries = generator.generate_journal_entries(receipt)
+                for entry_data in journal_entries:
+                    journal_entry = JournalEntry(
+                        receipt_id=entry_data.receipt_id,
+                        video_id=entry_data.video_id,
+                        time_ms=receipt.best_frame.time_ms if receipt.best_frame else 0,
+                        debit_account=entry_data.debit_account,
+                        credit_account=entry_data.credit_account,
+                        debit_amount=entry_data.debit_amount,
+                        credit_amount=entry_data.credit_amount,
+                        tax_account=entry_data.tax_account,
+                        tax_amount=entry_data.tax_amount,
+                        memo=entry_data.memo,
+                        status='unconfirmed'
+                    )
+                    db.add(journal_entry)
+            
+            db.commit()
+            logger.info(f"Generated journal entries for {len(receipts)} receipts")
+            
+            # 新システムで完了
+            update_progress(100, "分析完了")
+            video.status = VideoStatus.DONE
+            video.progress = 100
+            video.progress_message = "分析完了"
+            db.commit()
+            logger.info(f"Video {video_id} analysis complete with new system")
+            return  # 新システム使用時はここで終了
+            
+        else:
+            # フォールバック: 古いシステムを使用
+            logger.warning("Using fallback frame selection system")
+            
+            # 改善されたフレーム分散選択 - 全体均等分割
+            def distribute_frames_intelligently(frames_data, target_count):
+                """ビデオ全体を均等にカバーするインテリジェントフレーム選択"""
+                if not frames_data:
+                    return []
+                
+                # スマートフレーム抽出器を使用した場合、すでに最適化済み
+                # すべてのフレームをそのまま使用
+                if len(frames_data) <= 30:
+                    logger.info(f"Using all {len(frames_data)} smart-extracted frames without filtering")
+                    return frames_data
+                
+                # 時間順にソート
+                frames_sorted = sorted(frames_data, key=lambda x: x['time_ms'])
+                min_time = frames_sorted[0]['time_ms']
+                max_time = frames_sorted[-1]['time_ms']
+                duration = max_time - min_time
+                
+                selected_frames = []
+                used_times = set()
+                
+                # 全区間を均等分割（最初から最後まで）
+                if duration > 0 and target_count > 0:
+                    # 均等間隔を計算
+                    interval = duration / target_count
                     
-                    if not nearby_frames:
-                        # 範囲を広げて再検索
+                    for i in range(target_count):
+                        # 各区間の中心時間
+                        target_time = min_time + (i * interval) + (interval / 2)
+                        
+                        # ターゲット時間付近のフレームを探す（±interval/2の範囲）
                         nearby_frames = [
                             f for f in frames_sorted 
-                            if abs(f['time_ms'] - target_time) <= interval
+                            if abs(f['time_ms'] - target_time) <= interval/2
                             and f['time_ms'] not in used_times
                         ]
-                    
-                    if not nearby_frames:
-                        # それでもない場合は全体から最も近いフレーム
-                        available_frames = [f for f in frames_sorted if f['time_ms'] not in used_times]
-                        if available_frames:
-                            nearby_frames = [min(available_frames, key=lambda x: abs(x['time_ms'] - target_time))]
-                    
-                    if nearby_frames:
-                        # ターゲット時間に最も近く品質の良いフレームを選択
-                        best_frame = min(nearby_frames, 
-                                       key=lambda x: (abs(x['time_ms'] - target_time) / 1000, -x.get('quality_score', 0)))
-                        selected_frames.append(best_frame)
-                        used_times.add(best_frame['time_ms'])
-                        logger.info(f"Segment {i+1}/{target_count} (target: {target_time:.0f}ms): selected frame at {best_frame['time_ms']}ms (score: {best_frame.get('quality_score', 0):.3f})")
-                    else:
-                        logger.warning(f"Segment {i+1}/{target_count}: No frame available for target {target_time:.0f}ms")
-            
-            # 最小フレーム数を保証
-            if len(selected_frames) < target_count:
-                # まだ選択されていない高品質フレームを追加
-                remaining = [f for f in frames_sorted if f['time_ms'] not in used_times]
-                remaining.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
+                        
+                        if not nearby_frames:
+                            # 範囲を広げて再検索
+                            nearby_frames = [
+                                f for f in frames_sorted 
+                                if abs(f['time_ms'] - target_time) <= interval
+                                and f['time_ms'] not in used_times
+                            ]
+                        
+                        if not nearby_frames:
+                            # それでもない場合は全体から最も近いフレーム
+                            available_frames = [f for f in frames_sorted if f['time_ms'] not in used_times]
+                            if available_frames:
+                                nearby_frames = [min(available_frames, key=lambda x: abs(x['time_ms'] - target_time))]
+                        
+                        if nearby_frames:
+                            # ターゲット時間に最も近く品質の良いフレームを選択
+                            best_frame = min(nearby_frames, 
+                                           key=lambda x: (abs(x['time_ms'] - target_time) / 1000, -x.get('quality_score', 0)))
+                            selected_frames.append(best_frame)
+                            used_times.add(best_frame['time_ms'])
+                            logger.info(f"Segment {i+1}/{target_count} (target: {target_time:.0f}ms): selected frame at {best_frame['time_ms']}ms (score: {best_frame.get('quality_score', 0):.3f})")
+                        else:
+                            logger.warning(f"Segment {i+1}/{target_count}: No frame available for target {target_time:.0f}ms")
                 
-                for frame in remaining[:target_count - len(selected_frames)]:
-                    selected_frames.append(frame)
-                    logger.info(f"Additional high-quality frame at {frame['time_ms']}ms (score: {frame.get('quality_score', 0):.3f})")
+                # 最小フレーム数を保証
+                if len(selected_frames) < target_count:
+                    # まだ選択されていない高品質フレームを追加
+                    remaining = [f for f in frames_sorted if f['time_ms'] not in used_times]
+                    remaining.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
+                    
+                    for frame in remaining[:target_count - len(selected_frames)]:
+                        selected_frames.append(frame)
+                        logger.info(f"Additional high-quality frame at {frame['time_ms']}ms (score: {frame.get('quality_score', 0):.3f})")
+                
+                # 時間順にソートして返す
+                selected_frames.sort(key=lambda x: x['time_ms'])
+                return selected_frames
             
-            # 時間順にソートして返す
-            selected_frames.sort(key=lambda x: x['time_ms'])
-            return selected_frames
-        
-        # インテリジェントフレーム選択（序盤集中 + 均等分割）
-        frames_data = distribute_frames_intelligently(frames_data, target_receipts)
+            # インテリジェントフレーム選択（序盤集中 + 均等分割）
+            frames_data = distribute_frames_intelligently(frames_data, target_max)
         
         # フレームデータをDBに保存
         frames = []
@@ -472,15 +576,17 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
                         db.add(journal_entry)
                         db.commit()
         
-        update_progress(90, "処理完了中...")
-        
-        # ステータス更新
-        video.status = VideoStatus.DONE
-        video.progress = 100
-        video.progress_message = "分析完了"
-        db.commit()
-        
-        logger.info(f"動画分析完了: Video {video_id}, Found {receipts_found} receipts from {len(selected_frames)} frames")
+        # 新システムを使用していない場合のみここに到達
+        if not selected_frames_new:
+            update_progress(90, "処理完了中...")
+            
+            # ステータス更新
+            video.status = VideoStatus.DONE
+            video.progress = 100
+            video.progress_message = "分析完了"
+            db.commit()
+            
+            logger.info(f"動画分析完了: Video {video_id}, Found {receipts_found} receipts from {len(selected_frames)} frames")
         
     except Exception as e:
         logger.error(f"動画分析エラー: {e}")

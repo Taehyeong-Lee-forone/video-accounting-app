@@ -238,169 +238,22 @@ class VideoAnalyzer:
             raise
     
     async def extract_receipt_data(self, image_path: str, ocr_text: str) -> Dict[str, Any]:
-        """レシートデータ抽出 - Vision API優先、失敗時Gemini使用"""
+        """レシートデータ抽出 - Vision APIのみ使用"""
         
-        # Vision API試行（より正確なOCR）
-        use_vision_api = os.getenv("USE_VISION_API", "true").lower() == "true"
-        
-        if use_vision_api:
-            try:
-                from services.vision_ocr import VisionOCRService
-                vision_service = VisionOCRService()
-                logger.info("Using Vision API for OCR")
-                result = await vision_service.extract_receipt_data(image_path)
-                if result and result.get('vendor') != 'OCR Failed':
-                    return result
-                logger.warning("Vision API failed or returned empty, falling back to Gemini")
-            except Exception as e:
-                logger.warning(f"Vision API not available: {e}, falling back to Gemini")
-        
-        # Geminiにフォールバック
-        if not self.gemini_model:
-            logger.warning("Both Vision API and Gemini not available, returning mock data")
-            from datetime import datetime
-            return {
-                "vendor": "Sample Store",
-                "document_type": "レシート",
-                "issue_date": datetime.now(),
-                "currency": "JPY",
-                "total": 1000,
-                "subtotal": 909,
-                "tax": 91,
-                "tax_rate": 0.10,
-                "line_items": [
-                    {"name": "Sample Item", "qty": 1, "unit_price": 909, "amount": 909}
-                ],
-                "payment_method": "現金",
-                "memo": "テストデータ"
-            }
-        
+        # Vision APIを使用
         try:
-            # 画像を読み込み
-            from PIL import Image
-            image = Image.open(image_path)
-            
-            # Gemini VisionがOCRと分析を同時に実行
-            prompt = """あなたは日本の領収書/インボイスの読取りアシスタントです。
-画像から全てのテキストを読み取り、以下のJSONを返してください。
-
-重要:
-1. 画像に領収書、レシート、請求書、メモ、手書きメモ、価格タグ、商品一覧など、ビジネス文書が少しでも見える場合は、必ずデータを抽出してください。
-2. ベンダー名が不明な場合、商品名やブランド名から推測してください。
-3. 画質が悪くても、可能な限り情報を抽出してください。
-4. 部分的に見切れていても、可読部分から情報を抽出してください。
-
-{
-  "vendor": "販売店名（不明の場合は商品名から推測）",
-  "document_type": "領収書|請求書|レシート|見積書|その他",
-  "issue_date": "日付文字列をそのまま（例: 令和6年12月25日, R6.12.25, 2024-12-25）",
-  "currency": "JPY",
-  "total": 0,
-  "subtotal": 0,
-  "tax": 0,
-  "tax_rate": 0.10|0.08|0|null,
-  "line_items": [{"name":"...", "qty":1, "unit_price":0, "amount":0}],
-  "payment_method": "現金|クレジット|電子マネー|不明",
-  "memo": "補足情報"
-}
-
-返答はJSONのみ。金額は数値として返してください。
-画像からテキストを直接読み取って認識してください。手書き数字も推定してください。
-
-document_typeは必ず5つの選択肢（領収書、請求書、レシート、見積書、その他）の中から1つだけを選んでください。
-「請求書・領収書」のような複合的な表記は使用しないでください。
-"""
-            
-            response = self.gemini_model.generate_content([image, prompt])
-            
-            # Log the frame being analyzed
-            from pathlib import Path
-            frame_name = Path(image_path).name
-            logger.info(f"Analyzing frame: {frame_name}")
-            
-            # Log the raw Gemini response
-            logger.debug(f"Raw Gemini response for {frame_name}: {response.text[:500]}")
-            
-            # JSON部分を抽出
-            json_str = response.text.strip()
-            if json_str.startswith('```json'):
-                json_str = json_str[7:]
-            if json_str.endswith('```'):
-                json_str = json_str[:-3]
-            
-            # JSON文字列のクリーニング
-            json_str = json_str.strip()
-            
-            try:
-                receipt_data = json.loads(json_str)
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON parse error: {e}")
-                logger.error(f"Raw JSON string: {json_str[:500]}")
-                # エラー時はデフォルト値を返す
-                return {
-                    "vendor": "解析エラー",
-                    "document_type": "その他",
-                    "issue_date": None,
-                    "currency": "JPY",
-                    "total": 0,
-                    "subtotal": 0,
-                    "tax": 0,
-                    "tax_rate": None,
-                    "line_items": [],
-                    "payment_method": "不明",
-                    "memo": f"JSON解析エラー: {str(e)[:100]}"
-                }
-            
-            # Log the raw document type received from Gemini
-            logger.info(f"Gemini returned document_type: '{receipt_data.get('document_type')}'")
-            
-            # Simple safety check - if composite type slips through, take first part
-            if receipt_data.get('document_type') and '・' in receipt_data.get('document_type', ''):
-                # Handle composite types like "請求書・領収書" by taking the first type
-                first_type = receipt_data['document_type'].split('・')[0]
-                logger.info(f"Splitting composite document type: '{receipt_data['document_type']}' -> '{first_type}'")
-                receipt_data['document_type'] = first_type
-            
-            # 日本の元号を含む日付を変換
-            if receipt_data.get('issue_date'):
-                date_str = receipt_data['issue_date']
-                
-                if not date_str or date_str == 'null' or date_str == 'None':
-                    receipt_data['issue_date'] = None
-                else:
-                    # まず日本の元号形式かチェック
-                    if is_japanese_era_date(date_str):
-                        parsed_date = parse_japanese_date(date_str)
-                        if parsed_date:
-                            receipt_data['issue_date'] = parsed_date.strftime('%Y-%m-%d')
-                            logger.info(f"Converted Japanese era date: {date_str} -> {receipt_data['issue_date']}")
-                        else:
-                            logger.warning(f"Failed to parse Japanese era date: {date_str}")
-                            # Try general parsing as fallback
-                            parsed_date = parse_japanese_date(date_str)
-                            if parsed_date:
-                                receipt_data['issue_date'] = parsed_date.strftime('%Y-%m-%d')
-                            else:
-                                receipt_data['issue_date'] = None
-                    else:
-                        # 一般的な日付形式を試す（YYYY-MM-DD, YYYY/MM/DD等）
-                        parsed_date = parse_japanese_date(date_str)
-                        if parsed_date:
-                            receipt_data['issue_date'] = parsed_date.strftime('%Y-%m-%d')
-                            logger.info(f"Parsed standard date: {date_str} -> {receipt_data['issue_date']}")
-                        else:
-                            # Keep original string if it looks like a valid date format
-                            if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
-                                receipt_data['issue_date'] = date_str
-                            else:
-                                logger.warning(f"Could not parse date: {date_str}")
-                                receipt_data['issue_date'] = None
-            
-            return receipt_data
-            
+            from services.vision_ocr import VisionOCRService
+            vision_service = VisionOCRService()
+            logger.info("Using Vision API for OCR")
+            result = await vision_service.extract_receipt_data(image_path)
+            if result and result.get('vendor') != 'OCR Failed':
+                return result
+            else:
+                logger.error("Vision API failed to extract receipt data")
+                raise Exception("Vision API failed to extract receipt data")
         except Exception as e:
-            logger.error(f"Gemini APIエラー: {e}")
-            return {}
+            logger.error(f"Vision API error: {e}")
+            raise Exception(f"Vision API error: {e}")
     
     def generate_receipt_fingerprint(self, receipt_data: Dict) -> str:
         """レシート固有フィンガープリント生成 - コア要素だけでユニークな識別子を生成"""

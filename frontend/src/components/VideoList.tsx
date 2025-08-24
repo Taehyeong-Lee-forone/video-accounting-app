@@ -81,7 +81,7 @@ export default function VideoList() {
     
     setDeletingId(videoId)
     try {
-      await api.delete(`/api/videos/${videoId}`)
+      await api.delete(`/videos/${videoId}`)
       toast.success('動画を削除しました')
       refetch()
     } catch (error) {
@@ -116,7 +116,7 @@ export default function VideoList() {
               {/* サムネイル領域 */}
               <div className="relative aspect-video bg-gray-200">
                 <img 
-                  src={`${API_URL}/api/videos/${video.id}/thumbnail`}
+                  src={`${API_URL}/videos/${video.id}/thumbnail`}
                   alt={video.filename}
                   className="w-full h-full object-cover"
                   onError={(e) => {

@@ -35,7 +35,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [modalReceipt, setModalReceipt] = useState<any>(null)
   const [modalJournal, setModalJournal] = useState<any>(null)
-  const playerRef = useRef<ReactPlayer>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const exportMenuRef = useRef<HTMLDivElement>(null)
 
   // Close export menu when clicking outside
@@ -66,13 +66,13 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
       setSelectedReceipt(relatedReceipt)
       
       // ビデオシーク
-      if (relatedReceipt.best_frame?.time_ms !== undefined && playerRef.current && playerReady) {
+      if (relatedReceipt.best_frame?.time_ms !== undefined && videoRef.current) {
         const seconds = relatedReceipt.best_frame.time_ms / 1000
         setPlaying(false)
         
         setTimeout(() => {
-          if (playerRef.current) {
-            playerRef.current.seekTo(seconds, 'seconds')
+          if (videoRef.current) {
+            videoRef.current.currentTime = seconds
           }
         }, 100)
       }
@@ -81,58 +81,67 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
       setModalReceipt(relatedReceipt)
       setModalJournal(journal)
       setShowReceiptModal(true)
-    } else if (playerRef.current && journal.time_ms) {
+    } else if (videoRef.current && journal.time_ms) {
       // フォールバック: journalのtime_msを使用
       const seconds = journal.time_ms / 1000
-      playerRef.current.seekTo(seconds)
+      videoRef.current.currentTime = seconds
     }
   }
 
   const handleReceiptClick = (receipt: any) => {
     console.log('Receipt clicked:', receipt)
+    console.log('best_frame:', receipt.best_frame)
+    console.log('time_ms:', receipt.best_frame?.time_ms)
     setSelectedReceipt(receipt)
     
     // ビデオシーク
     if (receipt.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== null) {
       const seconds = receipt.best_frame.time_ms / 1000
-      console.log('Attempting to seek to:', seconds, 'seconds')
+      console.log('Attempting to seek to:', seconds, 'seconds from', receipt.best_frame.time_ms, 'ms')
       
-      if (playerRef.current && playerReady) {
+      if (videoRef.current) {
+        console.log('Video element found, current time before:', videoRef.current.currentTime)
         // 再生停止
-        setPlaying(false)
+        videoRef.current.pause()
         
         // 少し遅延後にシーク（Reactステート更新待機）
         setTimeout(() => {
-          if (playerRef.current) {
+          if (videoRef.current) {
             try {
-              // ReactPlayerのseekToメソッドを直接呼び出し
-              playerRef.current.seekTo(seconds, 'seconds')
-              console.log('Seeked using ReactPlayer seekTo')
+              console.log('Before seek - video properties:')
+              console.log('  duration:', videoRef.current.duration)
+              console.log('  readyState:', videoRef.current.readyState)
+              console.log('  currentTime before:', videoRef.current.currentTime)
+              console.log('Setting currentTime to:', seconds)
               
-              // 追加で内部プレーヤーへのアクセスを試行
+              videoRef.current.currentTime = seconds
+              
+              // 即座に確認
+              console.log('Immediately after seek:', videoRef.current.currentTime)
+              
+              // さらに遅延後に確認
               setTimeout(() => {
-                try {
-                  const internalPlayer = playerRef.current?.getInternalPlayer()
-                  if (internalPlayer && typeof internalPlayer.currentTime !== 'undefined') {
-                    internalPlayer.currentTime = seconds
-                    console.log('Also set currentTime directly:', seconds)
-                  }
-                } catch (e) {
-                  console.log('Could not access internal player:', e)
-                }
+                console.log('After 100ms delay:', videoRef.current?.currentTime)
               }, 100)
             } catch (e) {
               console.error('Seek error:', e)
             }
+          } else {
+            console.log('videoRef.current is null in setTimeout')
           }
         }, 100)
       } else {
-        console.log('Player not ready or ref is null')
+        console.log('Video ref is null')
       }
     } else {
-      console.log('No valid time_ms in best_frame')
+      console.log('No valid time_ms in best_frame, receipt:', receipt)
     }
     
+    // 영수증 클릭 시 모달은 열지 않음 (비디오 시크만 수행)
+  }
+  
+  // 새로운 함수: 상세보기 모달 열기
+  const handleOpenReceiptModal = (receipt: any) => {
     // 該当する領収書の仕訳データを検索
     const relatedJournal = journals?.find((j: any) => j.receipt_id === receipt.id)
     
@@ -143,8 +152,8 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   }
 
   const handleFrameStep = (direction: 'forward' | 'backward') => {
-    if (playerRef.current && playerReady) {
-      const currentSeconds = playerRef.current.getCurrentTime()
+    if (videoRef.current) {
+      const currentSeconds = videoRef.current.currentTime
       const frameRate = 30 // 一般的なフレームレート（調整可能）
       const frameDuration = 1 / frameRate
       const newTime = direction === 'forward' 
@@ -152,25 +161,25 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
         : Math.max(0, currentSeconds - frameDuration)
       
       setPlaying(false)
-      playerRef.current.seekTo(newTime, 'seconds')
+      videoRef.current.currentTime = newTime
       console.log(`Frame ${direction}: ${currentSeconds} -> ${newTime}`)
     }
   }
 
   const handleSecondsJump = (seconds: number) => {
-    if (playerRef.current && playerReady) {
-      const currentSeconds = playerRef.current.getCurrentTime()
+    if (videoRef.current) {
+      const currentSeconds = videoRef.current.currentTime
       const newTime = Math.max(0, currentSeconds + seconds)
       
-      playerRef.current.seekTo(newTime, 'seconds')
+      videoRef.current.currentTime = newTime
       console.log(`Jump ${seconds}s: ${currentSeconds} -> ${newTime}`)
     }
   }
 
   const handlePlayerReady = () => {
     setPlayerReady(true)
-    if (playerRef.current) {
-      setVideoDuration(playerRef.current.getDuration())
+    if (videoRef.current) {
+      setVideoDuration(videoRef.current.duration)
     }
   }
 
@@ -183,20 +192,15 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   }
 
   const handleMarkerClick = (timeMs: number) => {
-    if (playerRef.current && playerReady) {
+    if (videoRef.current) {
       const seconds = timeMs / 1000
       setPlaying(false)
       requestAnimationFrame(() => {
-        if (playerRef.current) {
+        if (videoRef.current) {
           try {
-            const player = playerRef.current.getInternalPlayer()
-            if (player && player.currentTime !== undefined) {
-              player.currentTime = seconds
-            } else {
-              playerRef.current.seekTo(seconds)
-            }
+            videoRef.current.currentTime = seconds
           } catch (e) {
-            playerRef.current.seekTo(seconds)
+            console.error('Seek error:', e)
           }
         }
       })
@@ -204,7 +208,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   }
 
   const handleAnalyzeCurrentFrame = async () => {
-    if (!playerRef.current || !playerReady) {
+    if (!videoRef.current) {
       toast.error('動画プレイヤーが準備できていません')
       return
     }
@@ -220,13 +224,13 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
       }
       
       // 一時停止後の正確な現在時間を取得
-      const currentTime = playerRef.current.getCurrentTime()
+      const currentTime = videoRef.current.currentTime
       const timeMs = Math.round(currentTime * 1000)  // Math.floorの代わりにMath.roundを使用
       
       console.log('Analyzing frame at:', currentTime, 'seconds (', timeMs, 'ms)')
-      console.log('Player internal time:', playerRef.current.getInternalPlayer()?.currentTime)
+      console.log('Video currentTime:', videoRef.current.currentTime)
       
-      const response = await api.post(`/api/videos/${videoId}/analyze-frame`, null, {
+      const response = await api.post(`/videos/${videoId}/analyze-frame`, null, {
         params: { time_ms: timeMs }
       })
       
@@ -274,7 +278,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
         tax: parseFloat(editForm.tax) || 0
       }
       
-      await api.patch(`/api/videos/${videoId}/receipts/${receiptId}`, updateData)
+      await api.patch(`/videos/${videoId}/receipts/${receiptId}`, updateData)
       toast.success('領収書を更新しました')
       
       setEditingReceiptId(null)
@@ -302,7 +306,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
       setShowHistory(receiptId)
       
       try {
-        const response = await api.get(`/api/videos/${videoId}/receipts/${receiptId}/history`)
+        const response = await api.get(`/videos/${videoId}/receipts/${receiptId}/history`)
         console.log('History data:', response.data)
       } catch (error) {
         console.error('Failed to fetch history:', error)
@@ -319,7 +323,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     }
     
     try {
-      await api.delete(`/api/videos/${videoId}/receipts/${receiptId}`)
+      await api.delete(`/videos/${videoId}/receipts/${receiptId}`)
       toast.success('領収書を削除しました')
       window.location.reload()
     } catch (error: any) {
@@ -330,7 +334,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
 
   const handleConfirm = async (journalId: number) => {
     try {
-      await api.post(`/api/journals/${journalId}/confirm`, {
+      await api.post(`/journals/${journalId}/confirm`, {
         confirmed_by: 'user'
       })
       toast.success('仕訳を確認しました')
@@ -342,7 +346,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
 
   const handleReject = async (journalId: number) => {
     try {
-      await api.post(`/api/journals/${journalId}/reject`)
+      await api.post(`/journals/${journalId}/reject`)
       toast.success('仕訳を差戻しました')
       refetchJournals()
     } catch (error) {
@@ -352,7 +356,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
 
   const handleUpdate = async (journalId: number, data: any) => {
     try {
-      await api.patch(`/api/journals/${journalId}`, data)
+      await api.patch(`/journals/${journalId}`, data)
       toast.success('仕訳を更新しました')
       refetchJournals()
     } catch (error) {
@@ -362,7 +366,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
 
   const handleExportCSV = async (format: string = 'standard') => {
     try {
-      const response = await api.get(`/api/export/csv?video_id=${videoId}&format=${format}`, {
+      const response = await api.get(`/export/csv?video_id=${videoId}&format=${format}`, {
         responseType: 'blob'
       })
       
@@ -413,32 +417,54 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-900">領収書分析レビュー</h1>
-            <div className="relative" ref={exportMenuRef}>
+            <div className="flex items-center gap-3">
+              {/* 詳細表示ボタン */}
               <button
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                className="btn-primary flex items-center"
+                onClick={() => {
+                  if (selectedReceipt) {
+                    handleOpenReceiptModal(selectedReceipt)
+                  } else {
+                    alert('領収書を選択してください')
+                  }
+                }}
+                className="btn-secondary flex items-center"
+                disabled={!selectedReceipt}
               >
-                <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
-                CSV出力
-                <ChevronDownIcon className={`h-4 w-4 ml-2 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                詳細表示
               </button>
               
-              {showExportMenu && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                  <div className="py-2">
-                    {exportFormats.map((format) => (
-                      <button
-                        key={format.value}
-                        onClick={() => handleExportCSV(format.value)}
-                        className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="font-medium text-gray-900">{format.label}</div>
-                        <div className="text-xs text-gray-500 mt-1">{format.description}</div>
-                      </button>
-                    ))}
+              {/* CSV出力ボタン */}
+              <div className="relative" ref={exportMenuRef}>
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="btn-primary flex items-center"
+                >
+                  <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
+                  CSV出力
+                  <ChevronDownIcon className={`h-4 w-4 ml-2 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
+                </button>
+              
+                {showExportMenu && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div className="py-2">
+                      {exportFormats.map((format) => (
+                        <button
+                          key={format.value}
+                          onClick={() => handleExportCSV(format.value)}
+                          className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="font-medium text-gray-900">{format.label}</div>
+                          <div className="text-xs text-gray-500 mt-1">{format.description}</div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -462,9 +488,9 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                     {/* 分析ボタン */}
                     <button
                       onClick={handleAnalyzeCurrentFrame}
-                      disabled={isAnalyzing || !playerReady}
+                      disabled={isAnalyzing || !videoRef.current}
                       className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        isAnalyzing || !playerReady
+                        isAnalyzing || !videoRef.current
                           ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                           : 'bg-blue-600 text-white hover:bg-blue-700'
                       }`}
@@ -492,6 +518,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                   onReceiptClick={handleReceiptClick}
                   onTimeUpdate={(time) => setCurrentTime(time)}
                   onDuration={(duration) => setVideoDuration(duration)}
+                  videoRef={videoRef}
                 />
               </div>
               
@@ -525,7 +552,11 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                             className={`p-3 cursor-pointer transition-all hover:bg-gray-50 ${
                               selectedReceipt?.id === receipt.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
                             }`}
-                            onClick={() => handleReceiptClick(receipt)}
+                            onClick={() => {
+                              console.log('Clicked receipt data:', receipt)
+                              console.log('Receipt best_frame:', receipt.best_frame)
+                              handleReceiptClick(receipt)
+                            }}
                           >
                             <div className="flex items-start gap-3">
                               {/* 番号とサムネイル */}
@@ -541,7 +572,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                                 </div>
                             {receipt.best_frame && (
                               <img 
-                                src={`http://localhost:5001/api/videos/frames/${receipt.best_frame.id}/image`}
+                                src={`http://localhost:5001/videos/frames/${receipt.best_frame.id}/image`}
                                 alt="Receipt"
                                 className="w-16 h-12 object-cover rounded mt-2 border"
                               />

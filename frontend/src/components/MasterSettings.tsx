@@ -14,7 +14,7 @@ export default function MasterSettings() {
   const { data: vendors } = useQuery({
     queryKey: ['vendors'],
     queryFn: async () => {
-      const res = await api.get('/api/masters/vendors')
+      const res = await api.get('/masters/vendors')
       return res.data
     }
   })
@@ -23,7 +23,7 @@ export default function MasterSettings() {
   const { data: accounts } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => {
-      const res = await api.get('/api/masters/accounts')
+      const res = await api.get('/masters/accounts')
       return res.data
     }
   })
@@ -32,14 +32,14 @@ export default function MasterSettings() {
   const { data: rules } = useQuery({
     queryKey: ['rules'],
     queryFn: async () => {
-      const res = await api.get('/api/masters/rules')
+      const res = await api.get('/masters/rules')
       return res.data
     }
   })
 
   const addVendorMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await api.post('/api/masters/vendors', data)
+      return await api.post('/masters/vendors', data)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendors'] })
@@ -49,7 +49,7 @@ export default function MasterSettings() {
 
   const addAccountMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await api.post('/api/masters/accounts', data)
+      return await api.post('/masters/accounts', data)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
@@ -59,7 +59,7 @@ export default function MasterSettings() {
 
   const addRuleMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await api.post('/api/masters/rules', data)
+      return await api.post('/masters/rules', data)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rules'] })

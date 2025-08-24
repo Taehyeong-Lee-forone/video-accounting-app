@@ -80,7 +80,7 @@ export default function ReceiptJournalModal({
         setLastReceiptId(receipt.id)
         if (receipt.best_frame?.time_ms !== undefined) {
           setCurrentFrameTime(receipt.best_frame.time_ms)
-          setCurrentFrameUrl(`${API_URL}/api/videos/frames/${receipt.best_frame.id}/image`)
+          setCurrentFrameUrl(`${API_URL}/videos/frames/${receipt.best_frame.id}/image`)
         }
       }
     }
@@ -135,7 +135,7 @@ export default function ReceiptJournalModal({
     
     // 新しいフレーム画像URL生成（キャッシュ無効化のためのタイムスタンプ追加）
     const timestamp = new Date().getTime()
-    const newFrameUrl = `${API_URL}/api/videos/${videoId}/frame-at-time?time_ms=${newTime}&t=${timestamp}`
+    const newFrameUrl = `${API_URL}/videos/${videoId}/frame-at-time?time_ms=${newTime}&t=${timestamp}`
     
     // フレーム時間とURLを更新
     setCurrentFrameTime(newTime)
@@ -155,7 +155,7 @@ export default function ReceiptJournalModal({
     setIsAnalyzing(true)
     try {
       // フレーム分析プレビューAPI呼び出し（保存しない）
-      const response = await api.post(`/api/videos/${videoId}/analyze-frame-preview`, null, {
+      const response = await api.post(`/videos/${videoId}/analyze-frame-preview`, null, {
         params: { time_ms: currentFrameTime }
       })
       
@@ -201,7 +201,7 @@ export default function ReceiptJournalModal({
       // フレームも更新（現在表示中のフレームへ）
       try {
         const response = await api.post(
-          `/api/videos/${videoId}/receipts/${receipt.id}/update-frame`,
+          `/videos/${videoId}/receipts/${receipt.id}/update-frame`,
           null,
           { params: { time_ms: currentFrameTime } }
         )
@@ -209,7 +209,7 @@ export default function ReceiptJournalModal({
         if (response.data.success) {
           // 新しいフレームURLに更新（完全に新しいURL）
           const timestamp = new Date().getTime()
-          const newFrameUrl = `${API_URL}/api/videos/frames/${response.data.new_frame_id}/image?t=${timestamp}`
+          const newFrameUrl = `${API_URL}/videos/frames/${response.data.new_frame_id}/image?t=${timestamp}`
           
           console.log('Updating frame URL:', newFrameUrl)
           setCurrentFrameUrl(newFrameUrl)
@@ -255,7 +255,7 @@ export default function ReceiptJournalModal({
       // フレームも更新（現在表示中のフレームへ）
       try {
         const response = await api.post(
-          `/api/videos/${videoId}/receipts/${receipt.id}/update-frame`,
+          `/videos/${videoId}/receipts/${receipt.id}/update-frame`,
           null,
           { params: { time_ms: currentFrameTime } }
         )
@@ -263,7 +263,7 @@ export default function ReceiptJournalModal({
         if (response.data.success) {
           // 新しいフレームURLに更新（完全に新しいURL）
           const timestamp = new Date().getTime()
-          const newFrameUrl = `${API_URL}/api/videos/frames/${response.data.new_frame_id}/image?t=${timestamp}`
+          const newFrameUrl = `${API_URL}/videos/frames/${response.data.new_frame_id}/image?t=${timestamp}`
           
           console.log('Updating frame URL:', newFrameUrl)
           setCurrentFrameUrl(newFrameUrl)
@@ -298,7 +298,7 @@ export default function ReceiptJournalModal({
       try {
         // 新しい領収書作成API呼び出し
         const response = await api.post(
-          `/api/videos/${videoId}/analyze-frame`,
+          `/videos/${videoId}/analyze-frame`,
           null,
           { params: { time_ms: currentFrameTime } }
         )
@@ -368,7 +368,7 @@ export default function ReceiptJournalModal({
       try {
         // 新しい領収書作成API呼び出し
         const response = await api.post(
-          `/api/videos/${videoId}/analyze-frame`,
+          `/videos/${videoId}/analyze-frame`,
           null,
           { params: { time_ms: currentFrameTime } }
         )
@@ -409,7 +409,7 @@ export default function ReceiptJournalModal({
     const targetReceipt = localReceipts.find(r => r.id === targetReceiptId)
     if (targetReceipt?.best_frame) {
       setCurrentFrameTime(targetReceipt.best_frame.time_ms)
-      setCurrentFrameUrl(`${API_URL}/api/videos/frames/${targetReceipt.best_frame.id}/image`)
+      setCurrentFrameUrl(`${API_URL}/videos/frames/${targetReceipt.best_frame.id}/image`)
     }
     
     if (onReceiptChange) {
@@ -444,11 +444,11 @@ export default function ReceiptJournalModal({
         tax: parseFloat(receiptForm.tax) || 0
       }
       
-      await api.patch(`/api/videos/${videoId}/receipts/${receipt.id}`, receiptData)
+      await api.patch(`/videos/${videoId}/receipts/${receipt.id}`, receiptData)
       
       // 仕訳データ保存
       if (journal) {
-        await api.patch(`/api/journals/${journal.id}`, journalForm)
+        await api.patch(`/journals/${journal.id}`, journalForm)
       }
       
       toast.success('保存しました')
@@ -470,14 +470,14 @@ export default function ReceiptJournalModal({
     try {
       if (isConfirmed) {
         // 確認を取り消す
-        await api.post(`/api/journals/${journal.id}/reject`)
+        await api.post(`/journals/${journal.id}/reject`)
         setIsConfirmed(false)
         // アニメーション効果を発動
         setConfirmAnimating(true)
         setTimeout(() => setConfirmAnimating(false), 600)
       } else {
         // 確認する
-        await api.post(`/api/journals/${journal.id}/confirm`, {
+        await api.post(`/journals/${journal.id}/confirm`, {
           confirmed_by: 'user'
         })
         setIsConfirmed(true)
@@ -500,7 +500,7 @@ export default function ReceiptJournalModal({
     try {
       const currentIndex = localReceipts.findIndex(r => r.id === receipt.id)
       
-      await api.delete(`/api/videos/${videoId}/receipts/${receipt.id}`)
+      await api.delete(`/videos/${videoId}/receipts/${receipt.id}`)
       toast.success('領収書を削除しました')
       
       // ローカル領収書リストから削除
@@ -842,7 +842,7 @@ export default function ReceiptJournalModal({
               >
                 <img 
                   key={currentFrameUrl || receipt.best_frame?.id}  // key追加で強制再レンダリング
-                  src={currentFrameUrl || `${API_URL}/api/videos/frames/${receipt.best_frame.id}/image`}
+                  src={currentFrameUrl || `${API_URL}/videos/frames/${receipt.best_frame.id}/image`}
                   alt="Receipt"
                   className={`absolute ${imageViewMode === 'contain' ? 'object-contain' : 'object-cover'} ${isLoadingFrame ? 'opacity-50' : ''} ${zoomLevel > 1 ? 'cursor-move' : 'cursor-default'}`}
                   style={{
@@ -979,7 +979,7 @@ export default function ReceiptJournalModal({
                       setCurrentFrameTime(newTime)
                       setIsLoadingFrame(true)
                       const timestamp = new Date().getTime()
-                      const newFrameUrl = `${API_URL}/api/videos/${videoId}/frame-at-time?time_ms=${newTime}&t=${timestamp}`
+                      const newFrameUrl = `${API_URL}/videos/${videoId}/frame-at-time?time_ms=${newTime}&t=${timestamp}`
                       setCurrentFrameUrl(newFrameUrl)
                     }}
                   >

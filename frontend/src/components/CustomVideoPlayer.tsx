@@ -418,7 +418,7 @@ export default function CustomVideoPlayer({
               {/* Thumbnail if available */}
               {hoveredReceipt.best_frame && (
                 <img 
-                  src={`http://localhost:5001/api/videos/frames/${hoveredReceipt.best_frame.id || hoveredReceipt.best_frame_id}/image`}
+                  src={`http://localhost:5001/videos/frames/${hoveredReceipt.best_frame.id || hoveredReceipt.best_frame_id}/image`}
                   className="w-32 h-24 object-cover rounded-t-lg"
                   alt=""
                   onError={(e) => { e.currentTarget.style.display = 'none' }}

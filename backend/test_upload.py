@@ -1,16 +1,29 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import requests
 import time
 import sys
+import os
 
-# API endpoint
-BASE_URL = "http://localhost:8000/api"
+# APIエンドポイント
+BASE_URL = "http://localhost:5001"
 
 def test_video_upload():
-    # Upload video
-    print("Uploading video...")
-    with open("/Users/taehyeonglee/video-accounting-app/backend/uploads/videos/multi_receipt.mp4", "rb") as f:
-        files = {"file": ("test_video.mp4", f, "video/mp4")}
+    # テストファイルパス
+    test_file = "/Users/taehyeonglee/video-accounting-app/backend/uploads/videos/1753309926185.mp4"
+    
+    # ファイル存在確認
+    if not os.path.exists(test_file):
+        print(f"❌ 테스트 파일이 없습니다: {test_file}")
+        return None
+    
+    print(f"📁 테스트 파일: {test_file}")
+    print(f"📊 파일 크기: {os.path.getsize(test_file) / (1024*1024):.2f} MB")
+    
+    # ビデオアップロード
+    print("\n⬆️ 비디오 업로드 중...")
+    with open(test_file, "rb") as f:
+        files = {"file": ("1753309926185.mp4", f, "video/mp4")}
         response = requests.post(f"{BASE_URL}/videos/", files=files)
     
     if response.status_code != 200:
@@ -22,8 +35,8 @@ def test_video_upload():
     video_id = video_data["id"]
     print(f"Video uploaded successfully. ID: {video_id}")
     
-    # Start analysis
-    print("Starting analysis...")
+    # 分析開始
+    print("\n🔍 분석 시작 중...")
     response = requests.post(
         f"{BASE_URL}/videos/{video_id}/analyze",
         json={"frames_per_second": 2}
@@ -36,9 +49,9 @@ def test_video_upload():
     
     print("Analysis started successfully")
     
-    # Poll for completion
-    print("Waiting for analysis to complete...")
-    for i in range(60):  # Wait up to 60 seconds
+    # 完了まで待機
+    print("\n⏳ 분석 완료 대기 중...")
+    for i in range(60):  # 最大60秒待機
         time.sleep(1)
         response = requests.get(f"{BASE_URL}/videos/{video_id}")
         if response.status_code == 200:

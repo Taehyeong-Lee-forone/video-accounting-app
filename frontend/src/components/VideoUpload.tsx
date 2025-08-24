@@ -32,7 +32,7 @@ export default function VideoUpload({ onUploadSuccess }: VideoUploadProps) {
     formData.append('file', file)
 
     try {
-      const response = await api.post('/api/videos/', formData, {
+      const response = await api.post('/videos/', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -51,7 +51,7 @@ export default function VideoUpload({ onUploadSuccess }: VideoUploadProps) {
       const videoId = response.data.id
       setAnalysisVideoId(videoId)
       
-      await api.post(`/api/videos/${videoId}/analyze`, {
+      await api.post(`/videos/${videoId}/analyze`, {
         frames_per_second: 2,
       })
       

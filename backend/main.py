@@ -50,11 +50,11 @@ app.add_middleware(
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # ルーター登録
-app.include_router(auth.router, prefix="/api/auth", tags=["認証"])
-app.include_router(videos.router, prefix="/api/videos", tags=["動画"])
-app.include_router(journals.router, prefix="/api/journals", tags=["仕訳"])
-app.include_router(masters.router, prefix="/api/masters", tags=["マスタ"])
-app.include_router(export.router, prefix="/api/export", tags=["エクスポート"])
+app.include_router(auth.router, prefix="/auth", tags=["認証"])
+app.include_router(videos.router, prefix="/videos", tags=["動画"])
+app.include_router(journals.router, prefix="/journals", tags=["仕訳"])
+app.include_router(masters.router, prefix="/masters", tags=["マスタ"])
+app.include_router(export.router, prefix="/export", tags=["エクスポート"])
 
 @app.get("/")
 async def root():

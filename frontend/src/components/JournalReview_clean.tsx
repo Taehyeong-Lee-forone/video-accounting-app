@@ -139,7 +139,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
       const currentTime = playerRef.current.getCurrentTime()
       const timeMs = Math.floor(currentTime * 1000)
       
-      const response = await api.post(`/api/videos/${videoId}/analyze-frame`, null, {
+      const response = await api.post(`/videos/${videoId}/analyze-frame`, null, {
         params: { time_ms: timeMs }
       })
       
@@ -182,7 +182,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
         tax: parseFloat(editForm.tax) || 0
       }
       
-      await api.patch(`/api/videos/${videoId}/receipts/${receiptId}`, updateData)
+      await api.patch(`/videos/${videoId}/receipts/${receiptId}`, updateData)
       toast.success('領収書を更新しました')
       
       setEditingReceiptId(null)
@@ -210,7 +210,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
       setShowHistory(receiptId)
       
       try {
-        const response = await api.get(`/api/videos/${videoId}/receipts/${receiptId}/history`)
+        const response = await api.get(`/videos/${videoId}/receipts/${receiptId}/history`)
         console.log('History data:', response.data)
       } catch (error) {
         console.error('Failed to fetch history:', error)
@@ -227,7 +227,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     }
     
     try {
-      await api.delete(`/api/videos/${videoId}/receipts/${receiptId}`)
+      await api.delete(`/videos/${videoId}/receipts/${receiptId}`)
       toast.success('領収書を削除しました')
       window.location.reload()
     } catch (error: any) {
@@ -238,7 +238,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
 
   const handleConfirm = async (journalId: number) => {
     try {
-      await api.post(`/api/journals/${journalId}/confirm`, {
+      await api.post(`/journals/${journalId}/confirm`, {
         confirmed_by: 'user'
       })
       toast.success('仕訳を確認しました')
@@ -250,7 +250,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
 
   const handleReject = async (journalId: number) => {
     try {
-      await api.post(`/api/journals/${journalId}/reject`)
+      await api.post(`/journals/${journalId}/reject`)
       toast.success('仕訳を差戻しました')
       refetch()
     } catch (error) {
@@ -260,7 +260,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
 
   const handleUpdate = async (journalId: number, data: any) => {
     try {
-      await api.patch(`/api/journals/${journalId}`, data)
+      await api.patch(`/journals/${journalId}`, data)
       toast.success('仕訳を更新しました')
       refetch()
     } catch (error) {
@@ -270,7 +270,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
 
   const handleExportCSV = async () => {
     try {
-      const response = await api.get(`/api/export/csv?video_id=${videoId}`, {
+      const response = await api.get(`/export/csv?video_id=${videoId}`, {
         responseType: 'blob'
       })
       
@@ -520,7 +520,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                     <div className="mb-4 flex items-start gap-4">
                       <div className="flex-shrink-0">
                         <img 
-                          src={`${API_URL}/api/videos/frames/${receipt.best_frame.id}/image`}
+                          src={`${API_URL}/videos/frames/${receipt.best_frame.id}/image`}
                           alt={`Frame at ${receipt.best_frame.time_ms}ms`}
                           className="w-32 h-24 object-cover rounded border"
                         />

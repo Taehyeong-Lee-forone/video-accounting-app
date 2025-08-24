@@ -84,21 +84,44 @@ class VisionOCRService:
         """OCR結果からレシートデータをパース"""
         full_text = ocr_result.get('full_text', '')
         
-        # 正規表現パターン
+        # 고급 파서 사용
+        from utils.receipt_parser import ReceiptParser
+        parser = ReceiptParser()
+        
+        # 正規表現パターン（税込優先）
         patterns = {
             'total': [
-                r'合計[：:\s]*([¥￥]?[\d,]+)円?',
+                # 最優先: 税込パターン
+                r'税込合計[：:\s]*([¥￥]?[\d,]+)円?',
+                r'税込[：:\s]*([¥￥]?[\d,]+)円?',
+                r'\(税込\)[：:\s]*([¥￥]?[\d,]+)円?',
+                r'([¥￥]?[\d,]+)円?[\s]*\(税込\)',
+                r'お預り[：:\s]*([¥￥]?[\d,]+)円?',  # お預りは通常税込金額
+                # 次優先: 合計パターン
+                r'合[\s]*計[：:\s]*([¥￥]?[\d,]+)円?',
+                r'お会計[：:\s]*([¥￥]?[\d,]+)円?',
+                r'お買上計[：:\s]*([¥￥]?[\d,]+)円?',
                 r'総額[：:\s]*([¥￥]?[\d,]+)円?',
                 r'お支払[：:\s]*([¥￥]?[\d,]+)円?',
                 r'合計金額[：:\s]*([¥￥]?[\d,]+)円?',
+                r'現金[：:\s]*([¥￥]?[\d,]+)円?',  # 現金支払額
                 r'計[：:\s]*([¥￥]?[\d,]+)円?'
+            ],
+            'subtotal': [
+                # 小計・税抜パターン
+                r'小計[：:\s]*([¥￥]?[\d,]+)円?',
+                r'税抜[：:\s]*([¥￥]?[\d,]+)円?',
+                r'税抜合計[：:\s]*([¥￥]?[\d,]+)円?',
+                r'商品計[：:\s]*([¥￥]?[\d,]+)円?'
             ],
             'tax': [
                 r'消費税[：:\s]*([¥￥]?[\d,]+)円?',
                 r'内税[：:\s]*([¥￥]?[\d,]+)円?',
-                r'税[：:\s]*([¥￥]?[\d,]+)円?',
-                r'\(税込[：:\s]*([¥￥]?[\d,]+)円?\)',
-                r'内消費税等[：:\s]*([¥￥]?[\d,]+)円?'
+                r'外税[：:\s]*([¥￥]?[\d,]+)円?',
+                r'内消費税[：:\s]*([¥￥]?[\d,]+)円?',
+                r'内消費税等[：:\s]*([¥￥]?[\d,]+)円?',
+                r'\(内税[：:\s]*([¥￥]?[\d,]+)円?\)',
+                r'税[：:\s]*([¥￥]?[\d,]+)円?'  # 最後の手段
             ],
             'date': [
                 r'(令和\d+年\d{1,2}月\d{1,2}日)',  # 令和6年12月25日
@@ -113,19 +136,25 @@ class VisionOCRService:
             ]
         }
         
-        # データ抽出
+        # 고급 파서로 금액 추출
+        parsed_amounts = parser.parse_receipt(full_text)
+        
+        # データ抽出（고급 파서 결과 우선 사용）
         receipt_data = {
             'vendor': self._extract_vendor(full_text),
-            'total': self._extract_amount(full_text, patterns['total']),
-            'tax': self._extract_amount(full_text, patterns['tax']),
+            'total': parsed_amounts.get('total'),
+            'subtotal': parsed_amounts.get('subtotal'),
+            'tax': parsed_amounts.get('tax'),
+            'tax_rate': parsed_amounts.get('tax_rate', 0.1),
             'issue_date': self._extract_date(full_text, patterns['date']),
             'payment_method': self._detect_payment_method(full_text),
             'document_type': self._detect_document_type(full_text),
             'raw_text': full_text
         }
         
-        # 税率計算
-        if receipt_data['total'] and receipt_data['tax']:
+        # 고급 파서가 이미 tax_rate를 계산했으므로, 추가 계산은 불필요
+        # 파서가 실패한 경우만 폴백
+        if not receipt_data['tax_rate'] and receipt_data['total'] and receipt_data['tax']:
             tax_rate = receipt_data['tax'] / receipt_data['total']
             if 0.07 <= tax_rate <= 0.09:
                 receipt_data['tax_rate'] = 0.08
@@ -133,14 +162,6 @@ class VisionOCRService:
                 receipt_data['tax_rate'] = 0.10
             else:
                 receipt_data['tax_rate'] = 0.10  # デフォルト値
-        else:
-            receipt_data['tax_rate'] = None
-        
-        # subtotal計算
-        if receipt_data['total'] and receipt_data['tax']:
-            receipt_data['subtotal'] = receipt_data['total'] - receipt_data['tax']
-        else:
-            receipt_data['subtotal'] = receipt_data['total']
         
         return receipt_data
     
@@ -178,6 +199,17 @@ class VisionOCRService:
                 except:
                     continue
         return None
+    
+    def _extract_tax_inclusive_amount(self, text: str, patterns: dict) -> Optional[float]:
+        """税込金額を優先的に抽出"""
+        # まず税込明記パターンを優先
+        tax_inclusive_patterns = patterns['total'][:5]  # 最初の5つは税込パターン
+        result = self._extract_amount(text, tax_inclusive_patterns)
+        if result:
+            return result
+        
+        # 税込パターンがなければ、通常の合計パターン
+        return self._extract_amount(text, patterns['total'])
     
     def _extract_date(self, text: str, patterns: list) -> Optional[str]:
         """日付抽出（日本の元号含む）"""

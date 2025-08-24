@@ -17,7 +17,7 @@ export function useVideoProgress(videoId: number | null, enabled: boolean = fals
     if (!videoId) return
 
     try {
-      const response = await api.get(`/api/videos/${videoId}`)
+      const response = await api.get(`/videos/${videoId}`)
       const videoData = response.data
       
       setProgress({

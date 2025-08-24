@@ -5,7 +5,7 @@ export function useVideoDetail(videoId: number) {
   return useQuery({
     queryKey: ['video', videoId],
     queryFn: async () => {
-      const response = await api.get(`/api/videos/${videoId}`)
+      const response = await api.get(`/videos/${videoId}`)
       return response.data
     },
     enabled: !!videoId,
