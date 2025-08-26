@@ -1,0 +1,7 @@
+# Vercel Functions用の最小限の依存関係
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+supabase==2.0.0
+google-cloud-vision==3.4.5
+google-auth==2.25.0
+python-dotenv==1.0.0

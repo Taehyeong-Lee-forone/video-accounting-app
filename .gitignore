@@ -69,3 +69,4 @@ ngrok.yml
 # Firebase
 .firebase/
 firebase-debug.log
+.vercel

@@ -547,8 +547,8 @@ export default function ReceiptJournalModal({
           {showReceiptList && localReceipts.length > 0 && (
             <div className="w-36 bg-gray-50 border-r flex flex-col h-full">
               <div className="p-2 border-b bg-white flex-shrink-0">
-                <h3 className="text-xs font-semibold text-gray-700">領収書一覧</h3>
-                <p className="text-xs text-gray-500">{localReceipts.length}件</p>
+                <h3 className="text-sm font-bold text-gray-900">領収書一覧</h3>
+                <p className="text-xs font-semibold text-gray-800">{localReceipts.length}件</p>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
                 {localReceipts.map((r, index) => {
@@ -567,7 +567,7 @@ export default function ReceiptJournalModal({
                       <div className="flex items-start gap-1">
                         <div className="flex flex-col items-center gap-0.5">
                           <span className={`text-xs font-bold ${
-                            r.id === receipt?.id ? 'text-blue-600' : 'text-gray-400'
+                            r.id === receipt?.id ? 'text-blue-600' : 'text-gray-600'
                           }`}>
                             {index + 1}
                           </span>
@@ -577,13 +577,13 @@ export default function ReceiptJournalModal({
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-gray-900 truncate">
+                          <p className="text-xs font-bold text-gray-900 truncate">
                             {r.vendor || '不明'}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs font-semibold text-gray-800">
                             ¥{r.total?.toLocaleString() || 0}
                           </p>
-                          <p className="text-xs text-gray-400">
+                          <p className="text-xs font-semibold text-gray-800">
                             {((r.best_frame?.time_ms || 0) / 1000).toFixed(1)}s
                           </p>
                           {r.is_manual && (
@@ -605,9 +605,9 @@ export default function ReceiptJournalModal({
                   className="p-0.5 hover:bg-gray-100 rounded disabled:opacity-30"
                   title="前の領収書"
                 >
-                  <ChevronLeftIcon className="h-3 w-3" />
+                  <ChevronLeftIcon className="h-3 w-3 text-gray-600" />
                 </button>
-                <span className="text-xs text-gray-600 self-center">
+                <span className="text-xs font-bold text-gray-900 self-center">
                   {currentReceiptIndex + 1} / {allReceipts.length}
                 </span>
                 <button
@@ -616,7 +616,7 @@ export default function ReceiptJournalModal({
                   className="p-0.5 hover:bg-gray-100 rounded disabled:opacity-30"
                   title="次の領収書"
                 >
-                  <ChevronRightIcon className="h-3 w-3" />
+                  <ChevronRightIcon className="h-3 w-3 text-gray-600" />
                 </button>
               </div>
             </div>
@@ -633,15 +633,15 @@ export default function ReceiptJournalModal({
                   title={showReceiptList ? '一覧を隠す' : '一覧を表示'}
                 >
                   {showReceiptList ? (
-                    <ChevronLeftIcon className="h-4 w-4" />
+                    <ChevronLeftIcon className="h-4 w-4 text-gray-700" />
                   ) : (
-                    <ChevronRightIcon className="h-4 w-4" />
+                    <ChevronRightIcon className="h-4 w-4 text-gray-700" />
                   )}
                 </button>
-                <h2 className="text-base font-semibold">
+                <h2 className="text-base font-bold text-gray-900">
                   領収書と仕訳の編集
                   {receipt && (
-                    <span className="ml-2 text-sm font-normal text-gray-500">
+                    <span className="ml-2 text-sm font-semibold text-gray-800">
                       - {receipt.vendor || '不明'}
                     </span>
                   )}
@@ -661,14 +661,14 @@ export default function ReceiptJournalModal({
                   />
                   <label 
                     htmlFor="confirm-check" 
-                    className={`text-xs font-medium cursor-pointer transition-colors ${isConfirmed ? 'text-green-700' : 'text-gray-600'}`}
+                    className={`text-xs font-medium cursor-pointer transition-colors ${isConfirmed ? 'text-green-700' : 'text-gray-700'}`}
                   >
                     {isConfirmed ? '確認済み' : '未確認'}
                   </label>
                   {/* アニメーション表示 */}
                   {confirmAnimating && (
                     <div className="absolute -right-8 flex items-center">
-                      <CheckIcon className={`h-5 w-5 ${isConfirmed ? 'text-green-600' : 'text-gray-500'} animate-bounce`} />
+                      <CheckIcon className={`h-5 w-5 ${isConfirmed ? 'text-green-600' : 'text-gray-700'} animate-bounce`} />
                     </div>
                   )}
                 </div>
@@ -685,7 +685,7 @@ export default function ReceiptJournalModal({
                   onClick={onClose}
                   className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors"
                 >
-                  <XMarkIcon className="h-4 w-4" />
+                  <XMarkIcon className="h-4 w-4 text-gray-600" />
                 </button>
               </div>
             </div>
@@ -698,8 +698,8 @@ export default function ReceiptJournalModal({
               {/* フレーム制御ボタン - コンパクトUI */}
               <div className="bg-white rounded p-1 border">
                 <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-xs font-medium text-gray-600">フレーム</span>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs font-medium text-gray-700">フレーム</span>
+                  <span className="text-xs text-gray-700 font-medium">
                     {(currentFrameTime / 1000).toFixed(1)}s
                   </span>
                 </div>
@@ -709,7 +709,7 @@ export default function ReceiptJournalModal({
                     <button
                       onClick={() => handleFrameNavigation('prev', 'second')}
                       disabled={isLoadingFrame}
-                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs disabled:opacity-50"
+                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50"
                       title="1秒戻る"
                     >
                       -1s
@@ -717,7 +717,7 @@ export default function ReceiptJournalModal({
                     <button
                       onClick={() => handleFrameNavigation('prev', 'halfSecond')}
                       disabled={isLoadingFrame}
-                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs disabled:opacity-50"
+                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50"
                       title="0.5秒戻る"
                     >
                       -.5s
@@ -725,10 +725,10 @@ export default function ReceiptJournalModal({
                     <button
                       onClick={() => handleFrameNavigation('prev', 'frame')}
                       disabled={isLoadingFrame}
-                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs disabled:opacity-50"
+                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50"
                       title="1フレーム戻る"
                     >
-                      <ChevronLeftIcon className="h-3 w-3" />
+                      <ChevronLeftIcon className="h-3 w-3 text-gray-600" />
                     </button>
                   </div>
                   
@@ -737,15 +737,15 @@ export default function ReceiptJournalModal({
                     <button
                       onClick={() => handleFrameNavigation('next', 'frame')}
                       disabled={isLoadingFrame}
-                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs disabled:opacity-50"
+                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50"
                       title="1フレーム進む"
                     >
-                      <ChevronRightIcon className="h-3 w-3" />
+                      <ChevronRightIcon className="h-3 w-3 text-gray-600" />
                     </button>
                     <button
                       onClick={() => handleFrameNavigation('next', 'halfSecond')}
                       disabled={isLoadingFrame}
-                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs disabled:opacity-50"
+                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50"
                       title="0.5秒進む"
                     >
                       +.5s
@@ -753,7 +753,7 @@ export default function ReceiptJournalModal({
                     <button
                       onClick={() => handleFrameNavigation('next', 'second')}
                       disabled={isLoadingFrame}
-                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs disabled:opacity-50"
+                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50"
                       title="1秒進む"
                     >
                       +1s
@@ -805,7 +805,7 @@ export default function ReceiptJournalModal({
                     disabled={isAnalyzing || isLoadingFrame}
                     className={`flex items-center justify-center px-2 py-1 rounded text-xs transition-all ml-auto ${
                       isAnalyzing || isLoadingFrame
-                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        ? 'bg-gray-200 text-gray-600 cursor-not-allowed'
                         : ocrApplyMode === 'overwrite'
                         ? 'bg-blue-600 text-white hover:bg-blue-700'
                         : 'bg-green-600 text-white hover:bg-green-700'
@@ -960,7 +960,7 @@ export default function ReceiptJournalModal({
               {/* タイムライン表示 - 改善版 */}
               {videoDuration > 0 && (
                 <div className="bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-2 border border-gray-200">
-                  <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                  <div className="flex items-center justify-between text-xs text-gray-700 mb-1">
                     <span className="font-medium">0.0s</span>
                     <span className="font-bold text-sm text-blue-600">
                       {(Math.max(0, currentFrameTime) / 1000).toFixed(1)}s
@@ -1054,12 +1054,12 @@ export default function ReceiptJournalModal({
                     <div className="flex items-center gap-2 text-xs">
                       <div className="flex items-center gap-1">
                         <div className="w-2 h-2 bg-gray-600/60 rounded-full" />
-                        <span className="text-gray-500">他の領収書</span>
+                        <span className="text-gray-700">他の領収書</span>
                       </div>
                       {receipt?.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== currentFrameTime && (
                         <div className="flex items-center gap-1">
                           <div className="w-2 h-2 bg-blue-300 rounded-full border border-blue-500" />
-                          <span className="text-gray-500">元の位置</span>
+                          <span className="text-gray-700">元の位置</span>
                         </div>
                       )}
                     </div>
@@ -1105,61 +1105,61 @@ export default function ReceiptJournalModal({
             <div className="flex flex-1">
               {/* 領収書データ列 */}
               <div className="w-44 p-2 flex flex-col">
-                <h3 className="font-semibold text-xs mb-1">領収書データ</h3>
+                <h3 className="font-bold text-sm text-gray-900 mb-2">領収書データ</h3>
 
             <div className="space-y-1">
               <div>
-                <label className="text-xs text-gray-500 block">店舗</label>
+                <label className="text-xs text-gray-700 font-medium block">店舗</label>
                 <input
                   type="text"
                   value={receiptForm.vendor}
                   onChange={(e) => setReceiptForm({...receiptForm, vendor: e.target.value})}
                   
-                  className="w-full px-1 py-0.5 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none"
+                  className="w-full px-1 py-0.5 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none"
                 />
               </div>
               
               <div className="grid grid-cols-2 gap-1">
                 <div>
-                  <label className="text-xs text-gray-500 block">金額</label>
+                  <label className="text-xs text-gray-700 font-medium block">金額</label>
                   <input
                     type="number"
                     value={receiptForm.total}
                     onChange={(e) => setReceiptForm({...receiptForm, total: e.target.value})}
                     
-                    className="w-full px-1 py-0.5 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none"
+                    className="w-full px-1 py-0.5 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block">税額</label>
+                  <label className="text-xs text-gray-700 font-medium block">税額</label>
                   <input
                     type="number"
                     value={receiptForm.tax}
                     onChange={(e) => setReceiptForm({...receiptForm, tax: e.target.value})}
                     
-                    className="w-full px-1 py-0.5 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none"
+                    className="w-full px-1 py-0.5 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs text-gray-500 block">発行日</label>
+                <label className="text-xs text-gray-700 font-medium block">発行日</label>
                 <input
                   type="date"
                   value={receiptForm.issue_date}
                   onChange={(e) => setReceiptForm({...receiptForm, issue_date: e.target.value})}
                   
-                  className="w-full px-1 py-0.5 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none"
+                  className="w-full px-1 py-0.5 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-gray-500 block">支払</label>
+                <label className="text-xs text-gray-700 font-medium block">支払</label>
                 <select
                   value={receiptForm.payment_method}
                   onChange={(e) => setReceiptForm({...receiptForm, payment_method: e.target.value})}
                   
-                  className="w-full px-1 py-0.5 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none"
+                  className="w-full px-1 py-0.5 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none"
                 >
                   <option value="">選択してください</option>
                   <option value="現金">現金</option>
@@ -1170,12 +1170,12 @@ export default function ReceiptJournalModal({
               </div>
 
               <div>
-                <label className="text-xs text-gray-500 block">メモ</label>
+                <label className="text-xs text-gray-700 font-medium block">メモ</label>
                 <textarea
                   value={receiptForm.memo}
                   onChange={(e) => setReceiptForm({...receiptForm, memo: e.target.value})}
                   
-                  className="w-full px-1 py-0.5 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none"
+                  className="w-full px-1 py-0.5 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none"
                   rows={1}
                 />
                 </div>
@@ -1184,52 +1184,52 @@ export default function ReceiptJournalModal({
 
               {/* 仕訳データ列 */}
               <div className="w-44 p-2 bg-gray-50 flex flex-col">
-                <h3 className="font-semibold text-xs mb-1">仕訳データ</h3>
+                <h3 className="font-bold text-sm text-gray-900 mb-2">仕訳データ</h3>
 
             {journal ? (
               <div className="space-y-1.5">
                 <div className="grid grid-cols-2 gap-1">
                   <div>
-                    <label className="text-xs text-gray-500">借方科目</label>
+                    <label className="text-xs text-gray-700 font-medium">借方科目</label>
                     <input
                       type="text"
                       value={journalForm.debit_account}
                       onChange={(e) => setJournalForm({...journalForm, debit_account: e.target.value})}
                       
-                      className="w-full p-1 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
+                      className="w-full p-1 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500">借方金額</label>
+                    <label className="text-xs text-gray-700 font-medium">借方金額</label>
                     <input
                       type="number"
                       value={journalForm.debit_amount}
                       onChange={(e) => setJournalForm({...journalForm, debit_amount: e.target.value})}
                       
-                      className="w-full p-1 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
+                      className="w-full p-1 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-1">
                   <div>
-                    <label className="text-xs text-gray-500">貸方科目</label>
+                    <label className="text-xs text-gray-700 font-medium">貸方科目</label>
                     <input
                       type="text"
                       value={journalForm.credit_account}
                       onChange={(e) => setJournalForm({...journalForm, credit_account: e.target.value})}
                       
-                      className="w-full p-1 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
+                      className="w-full p-1 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500">貸方金額</label>
+                    <label className="text-xs text-gray-700 font-medium">貸方金額</label>
                     <input
                       type="number"
                       value={journalForm.credit_amount}
                       onChange={(e) => setJournalForm({...journalForm, credit_amount: e.target.value})}
                       
-                      className="w-full p-1 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
+                      className="w-full p-1 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
                     />
                   </div>
                 </div>
@@ -1237,41 +1237,41 @@ export default function ReceiptJournalModal({
                 {journalForm.tax_account && (
                   <div className="grid grid-cols-2 gap-1">
                     <div>
-                      <label className="text-xs text-gray-500 block">税科目</label>
+                      <label className="text-xs text-gray-700 font-medium block">税科目</label>
                       <input
                         type="text"
                         value={journalForm.tax_account}
                         onChange={(e) => setJournalForm({...journalForm, tax_account: e.target.value})}
                         
-                        className="w-full px-1 py-0.5 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
+                        className="w-full px-1 py-0.5 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500 block">税額</label>
+                      <label className="text-xs text-gray-700 font-medium block">税額</label>
                       <input
                         type="number"
                         value={journalForm.tax_amount}
                         onChange={(e) => setJournalForm({...journalForm, tax_amount: e.target.value})}
                         
-                        className="w-full px-1 py-0.5 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
+                        className="w-full px-1 py-0.5 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
                       />
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label className="text-xs text-gray-500 block">摘要</label>
+                  <label className="text-xs text-gray-700 font-medium block">摘要</label>
                   <textarea
                     value={journalForm.memo}
                     onChange={(e) => setJournalForm({...journalForm, memo: e.target.value})}
-                    className="w-full px-1 py-0.5 text-xs border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
+                    className="w-full px-1 py-0.5 text-xs text-gray-900 font-medium border rounded hover:border-blue-400 focus:border-blue-500 focus:outline-none bg-white"
                     rows={1}
                   />
                 </div>
 
                 </div>
               ) : (
-                <div className="text-center py-4 text-gray-500 text-xs">
+                <div className="text-center py-4 text-gray-700 text-xs">
                   仕訳データがありません
                 </div>
               )}
@@ -1287,25 +1287,25 @@ export default function ReceiptJournalModal({
     {false && showOcrConfirmDialog && ocrPreviewData && (
       <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
         <div className="bg-white rounded-lg max-w-lg w-full p-6">
-          <h3 className="text-lg font-semibold mb-4">OCR分析結果</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">OCR分析結果</h3>
           
           <div className="space-y-3 mb-6 max-h-60 overflow-y-auto">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <span className="text-gray-500">店舗名:</span>
-                <span className="ml-2 font-medium">{ocrPreviewData.vendor || '不明'}</span>
+                <span className="text-gray-700 font-medium">店舗名:</span>
+                <span className="ml-2 font-medium text-gray-800">{ocrPreviewData.vendor || '不明'}</span>
               </div>
               <div>
-                <span className="text-gray-500">金額:</span>
-                <span className="ml-2 font-medium">¥{ocrPreviewData.total?.toLocaleString() || 0}</span>
+                <span className="text-gray-700 font-medium">金額:</span>
+                <span className="ml-2 font-medium text-gray-800">¥{ocrPreviewData.total?.toLocaleString() || 0}</span>
               </div>
               <div>
-                <span className="text-gray-500">税額:</span>
-                <span className="ml-2 font-medium">¥{ocrPreviewData.tax?.toLocaleString() || 0}</span>
+                <span className="text-gray-700 font-medium">税額:</span>
+                <span className="ml-2 font-medium text-gray-800">¥{ocrPreviewData.tax?.toLocaleString() || 0}</span>
               </div>
               <div>
-                <span className="text-gray-500">日付:</span>
-                <span className="ml-2 font-medium">
+                <span className="text-gray-700 font-medium">日付:</span>
+                <span className="ml-2 font-medium text-gray-800">
                   {ocrPreviewData.issue_date ? 
                     (typeof ocrPreviewData.issue_date === 'string' 
                       ? ocrPreviewData.issue_date.split('T')[0]
@@ -1314,8 +1314,8 @@ export default function ReceiptJournalModal({
                 </span>
               </div>
               <div className="col-span-2">
-                <span className="text-gray-500">支払方法:</span>
-                <span className="ml-2 font-medium">{ocrPreviewData.payment_method || '不明'}</span>
+                <span className="text-gray-700 font-medium">支払方法:</span>
+                <span className="ml-2 font-medium text-gray-800">{ocrPreviewData.payment_method || '不明'}</span>
               </div>
             </div>
           </div>
@@ -1335,7 +1335,7 @@ export default function ReceiptJournalModal({
                 />
                 <div>
                   <span className="text-sm font-medium text-gray-900">現在の領収書を上書き</span>
-                  <p className="text-xs text-gray-600">現在編集中の領収書データを置き換えます</p>
+                  <p className="text-xs text-gray-700">現在編集中の領収書データを置き換えます</p>
                 </div>
               </label>
               <label className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded transition-colors">
@@ -1347,7 +1347,7 @@ export default function ReceiptJournalModal({
                 />
                 <div>
                   <span className="text-sm font-medium text-gray-900">新しい領収書として追加</span>
-                  <p className="text-xs text-gray-600">現在の領収書はそのまま残し、新規作成します</p>
+                  <p className="text-xs text-gray-700">現在の領収書はそのまま残し、新規作成します</p>
                 </div>
               </label>
             </div>

@@ -127,7 +127,7 @@ export default function MasterSettings() {
       {/* ベンダーマスタ */}
       {activeTab === 'vendors' && (
         <div className="card">
-          <h3 className="text-lg font-semibold mb-4">ベンダーマスタ</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">ベンダーマスタ</h3>
           
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
             <h4 className="font-medium mb-3">新規追加</h4>
@@ -213,7 +213,7 @@ export default function MasterSettings() {
       {/* 勘定科目 */}
       {activeTab === 'accounts' && (
         <div className="card">
-          <h3 className="text-lg font-semibold mb-4">勘定科目</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">勘定科目</h3>
           
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
             <h4 className="font-medium mb-3">新規追加</h4>
@@ -287,7 +287,7 @@ export default function MasterSettings() {
       {/* 仕訳ルール */}
       {activeTab === 'rules' && (
         <div className="card">
-          <h3 className="text-lg font-semibold mb-4">仕訳ルール</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">仕訳ルール</h3>
           
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
             <h4 className="font-medium mb-3">新規追加</h4>

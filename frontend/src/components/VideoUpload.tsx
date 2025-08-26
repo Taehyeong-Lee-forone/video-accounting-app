@@ -106,7 +106,7 @@ export default function VideoUpload({ onUploadSuccess }: VideoUploadProps) {
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
-              className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+              className="bg-primary h-2 rounded-full transition-all duration-300"
               style={{ width: `${uploadProgress}%` }}
             />
           </div>
@@ -115,9 +115,9 @@ export default function VideoUpload({ onUploadSuccess }: VideoUploadProps) {
       
       {/* 分析進行率 */}
       {progress && progress.status !== 'queued' && (
-        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="mt-4 p-4 bg-primary-50 border border-primary-200 rounded-lg">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium text-blue-900">
+            <h3 className="text-sm font-medium text-primary-800">
               {progress.status === 'done' || progress.status === 'DONE' ? (
                 <>
                   <CheckCircleIcon className="h-4 w-4 inline mr-1 text-green-600" />
@@ -129,25 +129,25 @@ export default function VideoUpload({ onUploadSuccess }: VideoUploadProps) {
                 '分析中...'
               )}
             </h3>
-            <span className="text-sm font-medium text-blue-900">
+            <span className="text-sm font-medium text-primary-800">
               {progress.progress}%
             </span>
           </div>
           
           {progress.progress_message && (
-            <p className="text-xs text-blue-700 mb-2">
+            <p className="text-xs text-primary-600 mb-2">
               {progress.progress_message}
             </p>
           )}
           
-          <div className="w-full bg-blue-200 rounded-full h-2">
+          <div className="w-full bg-primary-100 rounded-full h-2">
             <div
               className={`h-2 rounded-full transition-all duration-500 ${
                 progress.status === 'done' || progress.status === 'DONE'
                   ? 'bg-green-500'
                   : progress.status === 'error' || progress.status === 'ERROR'
                   ? 'bg-red-500'
-                  : 'bg-blue-500'
+                  : 'bg-primary'
               }`}
               style={{ width: `${progress.progress}%` }}
             />

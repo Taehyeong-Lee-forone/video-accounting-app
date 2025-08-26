@@ -889,9 +889,29 @@ async def analyze_frame_at_time(
                 raise HTTPException(400, f"指定時刻 {time_ms}ms のフレームを取得できません")
         
         # フレームを保存（実際の時刻を使用）
+        # フレーム品質向上処理
+        height, width = frame.shape[:2]
+        
+        # 最小解像度確保（OCR用）
+        MIN_WIDTH = 1500  # OCR用最小幅
+        if width < MIN_WIDTH:
+            scale_factor = MIN_WIDTH / width
+            new_width = int(width * scale_factor)
+            new_height = int(height * scale_factor)
+            # INTER_CUBIC補間で高品質アップスケール
+            frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
+            logger.info(f"Frame upscaled from {width}x{height} to {new_width}x{new_height} for better OCR")
+        
+        # コントラスト強化
+        lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+        l = clahe.apply(l)
+        frame = cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2BGR)
+        
         frame_filename = f"manual_frame_{video_id}_{actual_time_ms}.jpg"
         frame_path = f"uploads/frames/{frame_filename}"
-        cv2.imwrite(frame_path, frame)
+        cv2.imwrite(frame_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 100])  # 最高品質で保存
         cap.release()
         
         logger.info(f"Frame capture - Requested: {time_ms}ms (frame {target_frame}), Actual: {actual_time_ms}ms (frame {actual_frame}), FPS: {fps}")

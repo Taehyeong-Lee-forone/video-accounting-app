@@ -90,8 +90,17 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
 
   const handleReceiptClick = (receipt: any) => {
     console.log('Receipt clicked:', receipt)
-    console.log('best_frame:', receipt.best_frame)
-    console.log('time_ms:', receipt.best_frame?.time_ms)
+    console.log('Receipt ID:', receipt?.id)
+    console.log('best_frame:', receipt?.best_frame)
+    console.log('time_ms:', receipt?.best_frame?.time_ms)
+    
+    // 領収書が有効かチェック
+    if (!receipt || !receipt.id) {
+      console.error('Invalid receipt data:', receipt)
+      toast.error('領収書データが無効です')
+      return
+    }
+    
     setSelectedReceipt(receipt)
     
     // ビデオシーク
@@ -103,6 +112,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
         console.log('Video element found, current time before:', videoRef.current.currentTime)
         // 再生停止
         videoRef.current.pause()
+        setPlaying(false)
         
         // 少し遅延後にシーク（Reactステート更新待機）
         setTimeout(() => {
@@ -125,6 +135,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
               }, 100)
             } catch (e) {
               console.error('Seek error:', e)
+              toast.error('シーク中にエラーが発生しました')
             }
           } else {
             console.log('videoRef.current is null in setTimeout')
@@ -132,12 +143,15 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
         }, 100)
       } else {
         console.log('Video ref is null')
+        toast.warning('ビデオプレーヤーが準備できていません')
       }
     } else {
       console.log('No valid time_ms in best_frame, receipt:', receipt)
+      // time_msがない場合も選択状態にはする
+      toast.info('この領収書にはタイムスタンプがありません')
     }
     
-    // 영수증 클릭 시 모달은 열지 않음 (비디오 시크만 수행)
+    // 領収書クリック時にモーダルは開かない（ビデオシークのみ実行）
   }
   
   // 새로운 함수: 상세보기 모달 열기
@@ -238,10 +252,11 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
       
       if (response.data.receipt_id) {
         toast.success(`フレーム分析完了: ${Math.floor(timeMs/1000)}秒地点`)
-        // ページリロードの代わりにデータのみリフェッチ
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
+        // データのみリフェッチして即座に反映
+        await Promise.all([
+          refetchVideo(),
+          refetchJournals()
+        ])
       } else {
         toast.warning('この位置に領収書データが見つかりませんでした')
       }
@@ -284,7 +299,11 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
       setEditingReceiptId(null)
       setEditForm({})
       
-      window.location.reload()
+      // データの再取得
+      await Promise.all([
+        refetchVideo(),
+        refetchJournals()
+      ])
     } catch (error: any) {
       console.error('Update receipt error:', error)
       toast.error(error.response?.data?.detail || '更新に失敗しました')
@@ -325,7 +344,11 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     try {
       await api.delete(`/videos/${videoId}/receipts/${receiptId}`)
       toast.success('領収書を削除しました')
-      window.location.reload()
+      // データの再取得
+      await Promise.all([
+        refetchVideo(),
+        refetchJournals()
+      ])
     } catch (error: any) {
       console.error('Delete receipt error:', error)
       toast.error(error.response?.data?.detail || '削除に失敗しました')
@@ -478,7 +501,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
               <div className="p-4 border-b bg-gray-50">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">動画プレイヤー</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">動画プレイヤー</h2>
                   <div className="flex items-center gap-2">
                     {/* 現在時間表示 */}
                     <div className="text-sm text-gray-600 px-2">
@@ -529,16 +552,17 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
           <div className="col-span-4">
             <div className="bg-white rounded-lg shadow-md overflow-hidden" style={{ maxHeight: '600px' }}>
               <div className="p-4 border-b bg-gray-50">
-                <h2 className="text-lg font-semibold">領収書一覧 ({video.receipts?.length || 0}件)</h2>
+                <h2 className="text-lg font-semibold text-gray-800">領収書一覧 ({video.receipts?.length || 0}件)</h2>
               </div>
               
               <div className="overflow-y-auto" style={{ maxHeight: '540px' }}>
                 {video.receipts && video.receipts.length > 0 ? (
                   <div className="divide-y divide-gray-200">
                     {[...video.receipts]
+                      .filter((receipt) => receipt && receipt.id) // 有効な領収書のみフィルタリング
                       .sort((a, b) => {
-                        const timeA = a.best_frame?.time_ms || 0
-                        const timeB = b.best_frame?.time_ms || 0
+                        const timeA = a?.best_frame?.time_ms || 0
+                        const timeB = b?.best_frame?.time_ms || 0
                         return timeA - timeB
                       })
                       .map((receipt: any, index: number) => {
@@ -548,13 +572,17 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                         
                         return (
                           <div 
-                            key={receipt.id} 
+                            key={`receipt-${receipt.id}-${index}`} 
                             className={`p-3 cursor-pointer transition-all hover:bg-gray-50 ${
                               selectedReceipt?.id === receipt.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
                             }`}
                             onClick={() => {
-                              console.log('Clicked receipt data:', receipt)
-                              console.log('Receipt best_frame:', receipt.best_frame)
+                              console.log('=== Receipt List Item Click ===')
+                              console.log('Receipt ID:', receipt?.id)
+                              console.log('Receipt vendor:', receipt?.vendor)
+                              console.log('Receipt best_frame:', receipt?.best_frame)
+                              console.log('Receipt time_ms:', receipt?.best_frame?.time_ms)
+                              console.log('Full receipt data:', JSON.stringify(receipt, null, 2))
                               handleReceiptClick(receipt)
                             }}
                           >
@@ -572,9 +600,13 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                                 </div>
                             {receipt.best_frame && (
                               <img 
-                                src={`http://localhost:5001/videos/frames/${receipt.best_frame.id}/image`}
+                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/videos/frames/${receipt.best_frame.id}/image`}
                                 alt="Receipt"
                                 className="w-16 h-12 object-cover rounded mt-2 border"
+                                onError={(e) => {
+                                  // フレーム画像が見つからない場合はプレースホルダーを表示
+                                  e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjZTVlN2ViIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzZiNzI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuOBquOBlzwvdGV4dD48L3N2Zz4='
+                                }}
                               />
                             )}
                           </div>
@@ -607,15 +639,15 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                             <div className="mt-2 grid grid-cols-2 gap-1 text-xs">
                               <div>
                                 <span className="text-gray-500">金額:</span>
-                                <span className="ml-1 font-medium">¥{receipt.total?.toLocaleString() || '0'}</span>
+                                <span className="ml-1 font-medium text-gray-800">¥{receipt.total?.toLocaleString() || '0'}</span>
                               </div>
                               <div>
                                 <span className="text-gray-500">税額:</span>
-                                <span className="ml-1">¥{receipt.tax?.toLocaleString() || '0'}</span>
+                                <span className="ml-1 text-gray-700">¥{receipt.tax?.toLocaleString() || '0'}</span>
                               </div>
                               <div className="col-span-2">
                                 <span className="text-gray-500">日付:</span>
-                                <span className="ml-1">
+                                <span className="ml-1 text-gray-700">
                                   {receipt.issue_date
                                     ? format(new Date(receipt.issue_date), 'yyyy/MM/dd', { locale: ja })
                                     : '-'}
@@ -640,7 +672,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
 
         {/* 仕訳テーブル */}
         <div className="mt-6 bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold mb-4">仕訳候補</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">仕訳候補</h2>
           {journals && journals.length > 0 ? (
             <JournalTable
               journals={journals}

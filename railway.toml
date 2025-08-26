@@ -1,0 +1,15 @@
+# Railway 배포 설정
+[build]
+builder = "nixpacks"
+buildCommand = "cd backend && pip install -r requirements.txt"
+
+[deploy]
+startCommand = "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "always"
+
+[nixpacks]
+providers = ["python", "ffmpeg"]
+pythonVersion = "3.11"
+aptPkgs = ["libgl1-mesa-glx", "libglib2.0-0", "ffmpeg"]

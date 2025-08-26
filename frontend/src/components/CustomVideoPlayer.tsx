@@ -56,18 +56,34 @@ export default function CustomVideoPlayer({
       return
     }
 
+    // メタデータが読み込まれているかチェック
+    if (!video.duration || isNaN(video.duration)) {
+      console.warn('Video metadata not loaded yet, waiting...')
+      
+      // メタデータロードまで待機
+      const handleMetadataLoaded = () => {
+        video.removeEventListener('loadedmetadata', handleMetadataLoaded)
+        performSeek(targetTime)
+      }
+      video.addEventListener('loadedmetadata', handleMetadataLoaded)
+      
+      // メタデータを強制的に読み込む
+      video.load()
+      return
+    }
+
     // readyStateの詳細チェック
     // 0 = HAVE_NOTHING - メタデータなし
     // 1 = HAVE_METADATA - メタデータのみ
     // 2 = HAVE_CURRENT_DATA - 現在のフレームのみ
     // 3 = HAVE_FUTURE_DATA - 少なくとも次のフレームあり
     // 4 = HAVE_ENOUGH_DATA - 十分なデータあり
-    if (video.readyState < 3) {
+    if (video.readyState < 2) {
       console.warn(`Video not fully ready for seeking. readyState: ${video.readyState}, waiting...`)
       
-      // readyStateが改善されるまで待機
+      // readyStateが改善されるまで待機（条件を緩和）
       const waitForReady = () => {
-        if (video.readyState >= 3) {
+        if (video.readyState >= 2 || video.duration) {
           console.log('Video is now ready, proceeding with seek')
           performSeek(targetTime)
         } else {
@@ -126,6 +142,28 @@ export default function CustomVideoPlayer({
     }, 100)
   }
 
+  // URLが変更されたときに動画を再ロード
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !url) return
+
+    console.log('Video URL changed, reloading:', url)
+    
+    // 既存のシーク操作をクリア
+    if (seekTimeoutRef.current) {
+      clearTimeout(seekTimeoutRef.current)
+    }
+
+    // 動画をリセット
+    setCurrentTime(0)
+    setDuration(0)
+    setIsPlaying(false)
+    
+    // 新しいURLをロード
+    video.src = url
+    video.load()
+  }, [url])
+
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
@@ -140,6 +178,15 @@ export default function CustomVideoPlayer({
       })
       setDuration(video.duration)
       onDuration?.(video.duration)
+    }
+    
+    const handleCanPlay = () => {
+      console.log('Video can play - ready for seeking')
+      // ここでビデオが再生可能になったことを確認
+    }
+
+    const handleLoadedData = () => {
+      console.log('Video loaded data - fully ready')
     }
 
     const handleTimeUpdate = () => {
@@ -157,12 +204,16 @@ export default function CustomVideoPlayer({
     }
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata)
+    video.addEventListener('canplay', handleCanPlay)
+    video.addEventListener('loadeddata', handleLoadedData)
     video.addEventListener('timeupdate', handleTimeUpdate)
     video.addEventListener('seeked', handleSeeked)
     video.addEventListener('seeking', handleSeeking)
 
     return () => {
       video.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      video.removeEventListener('canplay', handleCanPlay)
+      video.removeEventListener('loadeddata', handleLoadedData)
       video.removeEventListener('timeupdate', handleTimeUpdate)
       video.removeEventListener('seeked', handleSeeked)
       video.removeEventListener('seeking', handleSeeking)
@@ -275,12 +326,12 @@ export default function CustomVideoPlayer({
     >
       <video
         ref={videoRef}
-        src={url}
         className="w-full h-full object-contain"
         onClick={handlePlayPause}
-        preload="auto"
+        preload="metadata"
         crossOrigin="anonymous"
         playsInline
+        muted
       />
       
       {/* Controls Overlay */}

@@ -102,7 +102,7 @@ export default function VideoList() {
 
   return (
     <div className="card">
-      <h2 className="text-xl font-semibold mb-4">アップロード済み動画</h2>
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">アップロード済み動画</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {videos.map((video: Video) => {
           const status = statusConfig[video.status] || statusConfig[video.status?.toLowerCase()] || statusConfig.error
@@ -132,7 +132,7 @@ export default function VideoList() {
                 {/* ステータスバッジ */}
                 <div className={`absolute top-2 right-2 px-2 py-1 rounded-full bg-white/90 backdrop-blur-sm ${status.color}`}>
                   <StatusIcon className="h-4 w-4 inline mr-1" />
-                  <span className="text-xs font-medium">{status.label}</span>
+                  <span className="text-xs font-medium text-gray-700">{status.label}</span>
                 </div>
                 
                 {/* 領収書数（自動/手動区分） */}

@@ -21,14 +21,37 @@ class VisionOCRService:
         Vision APIクライアント初期化
         - ローカル: gcloud auth application-default login使用
         - Cloud Run: Workload Identity自動使用
+        - Railway/Render: Base64エンコードされたJSONキー使用
         """
         try:
-            # JSONキーなしでデフォルト認証使用
-            self.client = vision.ImageAnnotatorClient()
-            logger.info("Vision API client initialized with default credentials")
+            # 環境変数からBase64エンコードされたJSONキーを確認
+            import base64
+            import tempfile
+            from google.oauth2 import service_account
+            
+            credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+            
+            if credentials_json:
+                # Base64デコードしてJSONキーを復元
+                credentials_data = json.loads(base64.b64decode(credentials_json))
+                
+                # サービスアカウント認証情報を作成
+                credentials = service_account.Credentials.from_service_account_info(
+                    credentials_data,
+                    scopes=['https://www.googleapis.com/auth/cloud-platform']
+                )
+                
+                # 認証情報を使用してクライアント初期化
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                logger.info("Vision API client initialized with service account credentials")
+            else:
+                # JSONキーなしでデフォルト認証使用
+                self.client = vision.ImageAnnotatorClient()
+                logger.info("Vision API client initialized with default credentials")
+                
         except Exception as e:
             logger.error(f"Failed to initialize Vision API client: {e}")
-            logger.info("Please run: gcloud auth application-default login")
+            logger.info("Please run: gcloud auth application-default login or set GOOGLE_APPLICATION_CREDENTIALS_JSON")
             self.client = None
     
     def extract_text_from_image(self, image_path: str) -> Dict[str, Any]:
@@ -44,9 +67,15 @@ class VisionOCRService:
             image = vision.Image(content=content)
             
             # Document Text Detection使用（レシートにより適合）
+            # 日本語を最優先に設定し、OCR精度向上
             response = self.client.document_text_detection(
                 image=image,
-                image_context={'language_hints': ['ja', 'en']}
+                image_context={
+                    'language_hints': ['ja', 'ja-JP', 'en'],  # 日本語優先
+                    'text_detection_params': {
+                        'enable_text_detection_confidence_score': True
+                    }
+                }
             )
             
             if response.error.message:
@@ -169,22 +198,76 @@ class VisionOCRService:
         """販売者/店名抽出"""
         lines = text.split('\n')
         
-        # 一般的にレシート上部にある店名を探す
-        for i, line in enumerate(lines[:5]):  # 上部5行確認
-            # 会社名パターン
-            if any(keyword in line for keyword in ['株式会社', '有限会社', '合同会社', '(株)', '㈱']):
-                return line.strip()
-            # 店舗名パターン
-            if any(keyword in line for keyword in ['店', 'ストア', 'マート', 'スーパー']):
-                return line.strip()
+        # 除外すべきキーワード（基本的なもののみ）
+        exclude_keywords = [
+            '領収証', '領収書', 'レシート', '計算', '御買上', 
+            '売上票', 'お買い上げ', '納品書', '請求書', 'RECEIPT',
+            '登録番号', 'T5010002022488', '明細', '控え',
+            '但し', 'として', '内訳', '合計', '小計',
+            '印紙', '収入印紙', '税込', '税抜', '内税',
+            '下記の', '下記', '上記', '以下', '以上'  # 指示語も除外
+        ]
         
-        # 最初の空でない行をvendorとして推定
-        for line in lines:
+        # 優先順位リスト（高い順）
+        candidates = []
+        
+        # Priority 1: "様"が含まれる行（最優先）
+        for i, line in enumerate(lines[:10]):
+            if '様' in line:
+                cleaned = line.strip()
+                
+                # 「様」だけの行の場合、前の行と結合
+                if cleaned == '様' and i > 0:
+                    prev_line = lines[i-1].strip()
+                    if prev_line and len(prev_line) <= 20:
+                        # 名前として妥当そうなもの
+                        vendor_name = prev_line + '様'
+                        candidates.append((1, vendor_name))
+                
+                # 「様」が行内にある場合
+                elif '様' in cleaned and cleaned != '様':
+                    # 様の前の部分を取得
+                    sama_index = cleaned.index('様')
+                    vendor_base = cleaned[:sama_index].strip()
+                    if vendor_base:
+                        vendor_name = vendor_base + '様'
+                        # 除外キーワードが含まれていないもの優先
+                        if not any(kw in vendor_name for kw in exclude_keywords):
+                            candidates.append((1, vendor_name))
+                        else:
+                            candidates.append((2, vendor_name))
+        
+        # Priority 2: 会社名パターン
+        for line in lines[:8]:
+            if any(keyword in line for keyword in ['株式会社', '有限会社', '合同会社', '(株)', '㈱']):
+                cleaned = line.strip()
+                if not any(keyword in cleaned for keyword in exclude_keywords):
+                    candidates.append((3, cleaned))
+        
+        # Priority 3: 店舗名パターン
+        for line in lines[:8]:
+            if any(keyword in line for keyword in ['店', 'ストア', 'マート', 'スーパー', '商店']):
+                cleaned = line.strip()
+                if not any(keyword in cleaned for keyword in exclude_keywords):
+                    candidates.append((4, cleaned))
+        
+        # Priority 4: その他の有効な行（フォールバック）
+        for line in lines[:10]:
             cleaned = line.strip()
             if cleaned and len(cleaned) > 2:
-                return cleaned
+                # 基本的な除外キーワードチェック
+                if not any(keyword in cleaned for keyword in exclude_keywords):
+                    # 数字だけの行も除外
+                    if not cleaned.replace(' ', '').replace('-', '').isdigit():
+                        candidates.append((5, cleaned))
         
-        return None
+        # 優先順位でソートして最初のものを返す
+        if candidates:
+            candidates.sort(key=lambda x: x[0])
+            return candidates[0][1]
+        
+        # 何も見つからない場合は「Unknown」を返す（Noneだと保存されない）
+        return "Unknown"
     
     def _extract_amount(self, text: str, patterns: list) -> Optional[float]:
         """金額抽出"""
