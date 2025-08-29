@@ -46,7 +46,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 静的ファイル
+# 静的ファイル - ディレクトリが存在しない場合は作成
+import os
+os.makedirs("uploads", exist_ok=True)
+os.makedirs("uploads/frames", exist_ok=True)
+os.makedirs("uploads/videos", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # ルーター登録
