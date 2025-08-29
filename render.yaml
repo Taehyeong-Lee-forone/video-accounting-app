@@ -3,19 +3,10 @@ services:
   - type: web
     name: video-accounting-backend
     env: python
-    buildCommand: "cd backend && pip install -r requirements.txt"
-    startCommand: "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: video-accounting-db
-          property: connectionString
       - key: PYTHON_VERSION
         value: "3.11"
     autoDeploy: true
-
-databases:
-  - name: video-accounting-db
-    databaseName: videoaccounting
-    user: videouser
-    plan: free  # または 'starter' for production
