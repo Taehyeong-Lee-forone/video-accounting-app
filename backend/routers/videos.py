@@ -20,6 +20,30 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+@router.post("/test")
+async def test_upload():
+    """アップロードテスト用エンドポイント"""
+    try:
+        # テスト用のディレクトリ作成
+        base_dir = Path("/tmp") if os.getenv("RENDER") == "true" else Path("uploads")
+        test_dir = base_dir / "test"
+        test_dir.mkdir(parents=True, exist_ok=True)
+        
+        # テストファイル作成
+        test_file = test_dir / "test.txt"
+        test_file.write_text("Test upload successful")
+        
+        return {
+            "status": "success",
+            "render_env": os.getenv("RENDER", "false"),
+            "base_dir": str(base_dir),
+            "test_file": str(test_file),
+            "exists": test_file.exists()
+        }
+    except Exception as e:
+        logger.error(f"テストエラー: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
 @router.post("/", response_model=VideoResponse)
 async def upload_video(
     file: UploadFile = File(...),
@@ -27,38 +51,65 @@ async def upload_video(
 ):
     """動画アップロード"""
     try:
-        logger.info(f"アップロード開始: {file.filename}, Content-Type: {file.content_type}")
+        logger.info(f"=== アップロード開始 ===")
+        logger.info(f"ファイル名: {file.filename}")
+        logger.info(f"Content-Type: {file.content_type}")
+        logger.info(f"Render環境: {os.getenv('RENDER', 'false')}")
         
         # ファイル検証
+        if not file.filename:
+            raise HTTPException(400, "ファイル名が空です")
+            
         if not file.filename.endswith(('.mp4', '.mov', '.avi', '.webm', '.mkv')):
             logger.error(f"サポートされていないファイル形式: {file.filename}")
             raise HTTPException(400, "サポートされていないファイル形式です")
         
         # ファイル保存 - Render環境では/tmpを使用
         base_dir = Path("/tmp") if os.getenv("RENDER") == "true" else Path("uploads")
+        logger.info(f"ベースディレクトリ: {base_dir}")
+        
         upload_dir = base_dir / "videos"
-        upload_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"アップロードディレクトリ: {upload_dir}")
+        
+        try:
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"ディレクトリ作成成功: {upload_dir.exists()}")
+        except Exception as e:
+            logger.error(f"ディレクトリ作成失敗: {e}")
+            raise HTTPException(500, f"ディレクトリ作成失敗: {str(e)}")
         
         # ユニークなファイル名を生成
         import time
         timestamp = str(int(time.time() * 1000))
-        file_extension = Path(file.filename).suffix
+        file_extension = Path(file.filename).suffix or ".mp4"
         unique_filename = f"{timestamp}{file_extension}"
         file_path = upload_dir / unique_filename
+        logger.info(f"保存パス: {file_path}")
         
-        # ファイルを一度読み込んでサイズチェックと保存を同時に行う
-        file_content = await file.read()
-        file_size = len(file_content)
-        
-        logger.info(f"ファイルサイズ: {file_size / 1024 / 1024:.2f}MB")
-        
-        if file_size > 100 * 1024 * 1024:  # 100MB制限
-            logger.error(f"ファイルサイズが大きすぎます: {file_size / 1024 / 1024:.2f}MB")
-            raise HTTPException(400, "ファイルサイズが大きすぎます（最大100MB）")
-        
-        # ファイル内容を保存
-        with file_path.open("wb") as buffer:
-            buffer.write(file_content)
+        try:
+            # ファイルを一度読み込んでサイズチェックと保存を同時に行う
+            file_content = await file.read()
+            file_size = len(file_content)
+            
+            logger.info(f"ファイルサイズ: {file_size / 1024 / 1024:.2f}MB")
+            
+            if file_size == 0:
+                raise HTTPException(400, "ファイルが空です")
+            
+            if file_size > 100 * 1024 * 1024:  # 100MB制限
+                logger.error(f"ファイルサイズが大きすぎます: {file_size / 1024 / 1024:.2f}MB")
+                raise HTTPException(400, "ファイルサイズが大きすぎます（最大100MB）")
+            
+            # ファイル内容を保存
+            with file_path.open("wb") as buffer:
+                buffer.write(file_content)
+            
+            logger.info(f"ファイル保存成功: {file_path.exists()}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"ファイル保存エラー: {e}", exc_info=True)
+            raise HTTPException(500, f"ファイル保存失敗: {str(e)}")
         
         # サムネイル生成
         thumbnail_dir = base_dir / "thumbnails"
