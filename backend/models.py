@@ -40,7 +40,7 @@ class Video(Base):
     local_path = Column(String(500))
     thumbnail_path = Column(String(500))  # サムネイルパス追加
     duration_ms = Column(Integer)
-    status = Column(SQLEnum(VideoStatus), default=VideoStatus.QUEUED, nullable=False)
+    status = Column(String(20), default="queued", nullable=False)
     progress = Column(Integer, default=0)  # 進行率 0-100
     progress_message = Column(String(500))  # 現在進行中の作業説明
     error_message = Column(Text)
@@ -102,17 +102,17 @@ class Receipt(Base):
     best_frame_id = Column(Integer, ForeignKey("frames.id", ondelete="SET NULL"))
     vendor = Column(String(255))
     vendor_norm = Column(String(255))  # 正規化されたベンダー名
-    document_type = Column(SQLEnum(DocumentType))
+    document_type = Column(String(50))
     issue_date = Column(DateTime)
     currency = Column(String(3), default="JPY")
     total = Column(Float)
     subtotal = Column(Float)
     tax = Column(Float)
     tax_rate = Column(Float)
-    payment_method = Column(SQLEnum(PaymentMethod))
+    payment_method = Column(String(20))
     duplicate_of_id = Column(Integer, ForeignKey("receipts.id", ondelete="SET NULL"))
     normalized_text_hash = Column(String(64))
-    status = Column(SQLEnum(JournalStatus), default=JournalStatus.UNCONFIRMED)
+    status = Column(String(20), default="unconfirmed")
     is_manual = Column(Boolean, default=False)  # 手動追加フラグ
     memo = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -163,7 +163,7 @@ class JournalEntry(Base):
     tax_account = Column(String(100))
     tax_amount = Column(Float)
     memo = Column(Text)
-    status = Column(SQLEnum(JournalStatus), default=JournalStatus.UNCONFIRMED)
+    status = Column(String(20), default="unconfirmed")
     confirmed_by = Column(String(100))
     confirmed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -187,7 +187,7 @@ class Vendor(Base):
     default_debit_account = Column(String(100))
     default_credit_account = Column(String(100))
     default_tax_rate = Column(Float)
-    default_payment_method = Column(SQLEnum(PaymentMethod))
+    default_payment_method = Column(String(20))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
