@@ -143,7 +143,7 @@ async def upload_video(
             filename=file.filename,  # 元のファイル名を保持
             local_path=str(file_path),  # 実際の保存パス
             thumbnail_path=str(thumbnail_path) if thumbnail_path else None,
-            status=VideoStatus.QUEUED,
+            status="queued",  # 文字列値を直接使用
             progress=0  # 初期進捗を0に設定
         )
         db.add(video)
@@ -180,11 +180,11 @@ async def analyze_video(
     if not video:
         raise HTTPException(404, "動画が見つかりません")
     
-    if video.status == VideoStatus.PROCESSING:
+    if video.status == "processing":
         raise HTTPException(400, "既に分析中です")
     
     # ステータス更新
-    video.status = VideoStatus.PROCESSING
+    video.status = "processing"
     db.commit()
     
     # バックグラウンドタスク開始
@@ -335,7 +335,7 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
             
             # 新システムで完了
             update_progress(100, "分析完了")
-            video.status = VideoStatus.DONE
+            video.status = "done"
             video.progress = 100
             video.progress_message = "分析完了"
             db.commit()
@@ -662,7 +662,7 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
             update_progress(90, "処理完了中...")
             
             # ステータス更新
-            video.status = VideoStatus.DONE
+            video.status = "done"
             video.progress = 100
             video.progress_message = "分析完了"
             db.commit()
@@ -672,7 +672,7 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
     except Exception as e:
         logger.error(f"動画分析エラー: {e}")
         video = db.query(Video).filter(Video.id == video_id).first()
-        video.status = VideoStatus.ERROR
+        video.status = "error"
         video.error_message = str(e)
         db.commit()
 
