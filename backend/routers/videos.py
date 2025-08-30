@@ -716,17 +716,29 @@ async def list_videos(
     db: Session = Depends(get_db)
 ):
     """動画一覧取得"""
-    # 最新のビデオが先に来るようにソート
-    videos = db.query(Video).order_by(Video.created_at.desc()).offset(skip).limit(limit).all()
-    
-    # 各ビデオにレシート数を追加（自動/手動区分）
-    for video in videos:
-        total_receipts = db.query(Receipt).filter(Receipt.video_id == video.id).all()
-        video.receipts_count = len(total_receipts)
-        video.auto_receipts_count = len([r for r in total_receipts if not r.is_manual])
-        video.manual_receipts_count = len([r for r in total_receipts if r.is_manual])
-    
-    return videos
+    try:
+        # 最新のビデオが先に来るようにソート
+        videos = db.query(Video).order_by(Video.created_at.desc()).offset(skip).limit(limit).all()
+        
+        # 各ビデオにレシート数を追加（自動/手動区分）
+        for video in videos:
+            try:
+                total_receipts = db.query(Receipt).filter(Receipt.video_id == video.id).all()
+                video.receipts_count = len(total_receipts)
+                video.auto_receipts_count = len([r for r in total_receipts if not r.is_manual])
+                video.manual_receipts_count = len([r for r in total_receipts if r.is_manual])
+            except Exception as e:
+                logger.error(f"レシート数取得エラー (video_id={video.id}): {e}")
+                # エラー時はデフォルト値を設定
+                video.receipts_count = 0
+                video.auto_receipts_count = 0
+                video.manual_receipts_count = 0
+        
+        return videos
+    except Exception as e:
+        logger.error(f"動画一覧取得エラー: {e}", exc_info=True)
+        # エラー時は空のリストを返す
+        return []
 
 @router.get("/frames/{frame_id}/image")
 async def get_frame_image(frame_id: int, db: Session = Depends(get_db)):
