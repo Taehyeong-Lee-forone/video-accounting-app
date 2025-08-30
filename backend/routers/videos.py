@@ -34,17 +34,6 @@ async def upload_video(
             logger.error(f"サポートされていないファイル形式: {file.filename}")
             raise HTTPException(400, "サポートされていないファイル形式です")
         
-        # ファイルサイズ確認
-        file_content = await file.read()
-        file_size = len(file_content)
-        await file.seek(0)  # ファイルポインタをリセット
-        
-        logger.info(f"ファイルサイズ: {file_size / 1024 / 1024:.2f}MB")
-        
-        if file_size > 100 * 1024 * 1024:  # 100MB制限に変更（Renderの制限）
-            logger.error(f"ファイルサイズが大きすぎます: {file_size / 1024 / 1024:.2f}MB")
-            raise HTTPException(400, "ファイルサイズが大きすぎます（最大100MB）")
-        
         # ファイル保存 - Render環境では/tmpを使用
         base_dir = Path("/tmp") if os.getenv("RENDER") == "true" else Path("uploads")
         upload_dir = base_dir / "videos"
@@ -57,8 +46,19 @@ async def upload_video(
         unique_filename = f"{timestamp}{file_extension}"
         file_path = upload_dir / unique_filename
         
+        # ファイルを一度読み込んでサイズチェックと保存を同時に行う
+        file_content = await file.read()
+        file_size = len(file_content)
+        
+        logger.info(f"ファイルサイズ: {file_size / 1024 / 1024:.2f}MB")
+        
+        if file_size > 100 * 1024 * 1024:  # 100MB制限
+            logger.error(f"ファイルサイズが大きすぎます: {file_size / 1024 / 1024:.2f}MB")
+            raise HTTPException(400, "ファイルサイズが大きすぎます（最大100MB）")
+        
+        # ファイル内容を保存
         with file_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            buffer.write(file_content)
         
         # サムネイル生成
         thumbnail_dir = base_dir / "thumbnails"
@@ -67,7 +67,6 @@ async def upload_video(
         thumbnail_path = thumbnail_dir / thumbnail_filename
         
         try:
-            import cv2
             cap = cv2.VideoCapture(str(file_path))
             cap.set(cv2.CAP_PROP_POS_FRAMES, 10)  # 10番目のフレーム（より安定的）
             ret, frame = cap.read()
