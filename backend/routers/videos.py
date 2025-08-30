@@ -34,16 +34,23 @@ async def upload_video(
         if file.size > 500 * 1024 * 1024:  # 500MB制限
             raise HTTPException(400, "ファイルサイズが大きすぎます（最大500MB）")
         
-        # ファイル保存
-        upload_dir = Path("uploads/videos")
+        # ファイル保存 - Render環境では/tmpを使用
+        base_dir = Path("/tmp") if os.getenv("RENDER") == "true" else Path("uploads")
+        upload_dir = base_dir / "videos"
         upload_dir.mkdir(parents=True, exist_ok=True)
         
-        file_path = upload_dir / file.filename
+        # ユニークなファイル名を生成
+        import time
+        timestamp = str(int(time.time() * 1000))
+        file_extension = Path(file.filename).suffix
+        unique_filename = f"{timestamp}{file_extension}"
+        file_path = upload_dir / unique_filename
+        
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
         # サムネイル生成
-        thumbnail_dir = Path("uploads/thumbnails")
+        thumbnail_dir = base_dir / "thumbnails"
         thumbnail_dir.mkdir(parents=True, exist_ok=True)
         thumbnail_filename = f"{file_path.stem}_thumb.jpg"
         thumbnail_path = thumbnail_dir / thumbnail_filename
@@ -70,10 +77,10 @@ async def upload_video(
             logger.warning(f"Thumbnail generation failed: {e}")
             thumbnail_path = None
         
-        # DB登録
+        # DB登録 - 元のファイル名を保持
         video = Video(
-            filename=file.filename,
-            local_path=str(file_path),
+            filename=file.filename,  # 元のファイル名を保持
+            local_path=str(file_path),  # 実際の保存パス
             thumbnail_path=str(thumbnail_path) if thumbnail_path else None,
             status=VideoStatus.QUEUED
         )

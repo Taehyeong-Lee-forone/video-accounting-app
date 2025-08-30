@@ -31,10 +31,12 @@ async def lifespan(app: FastAPI):
         # エラーが発生してもアプリケーションは続行
         pass
     
-    # Create uploads directory
-    os.makedirs("uploads", exist_ok=True)
-    os.makedirs("uploads/frames", exist_ok=True)
-    os.makedirs("uploads/videos", exist_ok=True)
+    # Create uploads directory - Render環境では/tmpを使用
+    base_dir = "/tmp" if os.getenv("RENDER") == "true" else "uploads"
+    os.makedirs(base_dir, exist_ok=True)
+    os.makedirs(f"{base_dir}/frames", exist_ok=True)
+    os.makedirs(f"{base_dir}/videos", exist_ok=True)
+    os.makedirs(f"{base_dir}/thumbnails", exist_ok=True)
     
     yield
     # Shutdown
@@ -62,12 +64,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 静的ファイル - ディレクトリが存在しない場合は作成
+# 静的ファイル - Render環境では/tmpを使用
 import os
-os.makedirs("uploads", exist_ok=True)
-os.makedirs("uploads/frames", exist_ok=True)
-os.makedirs("uploads/videos", exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+static_dir = "/tmp" if os.getenv("RENDER") == "true" else "uploads"
+os.makedirs(static_dir, exist_ok=True)
+os.makedirs(f"{static_dir}/frames", exist_ok=True)
+os.makedirs(f"{static_dir}/videos", exist_ok=True)
+os.makedirs(f"{static_dir}/thumbnails", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=static_dir), name="uploads")
 
 # ルーター登録
 app.include_router(auth.router, prefix="/auth", tags=["認証"])
