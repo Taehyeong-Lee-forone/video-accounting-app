@@ -21,8 +21,15 @@ logger.info(f"サーバーポート設定: {port}")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    Base.metadata.create_all(bind=engine)
-    logger.info("データベーステーブルを作成しました")
+    try:
+        # テーブル作成（既存の場合はスキップ）
+        logger.info("データベーステーブルを確認中...")
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+        logger.info("データベース初期化完了")
+    except Exception as e:
+        logger.warning(f"データベース初期化警告: {e}")
+        # エラーが発生してもアプリケーションは続行
+        pass
     
     # Create uploads directory
     os.makedirs("uploads", exist_ok=True)
