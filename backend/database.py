@@ -8,26 +8,29 @@ import logging
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./video_accounting.db")
+# デバッグ情報を出力
+logger.info(f"RENDER環境: {os.getenv('RENDER', 'false')}")
+logger.info(f"DATABASE_URL設定: {'設定済み' if os.getenv('DATABASE_URL') else '未設定'}")
 
-# Render環境でSupabaseを使用する場合の設定
-if os.getenv("RENDER") == "true":
-    # Supabase Connection Pooling URLを使用（Pooler endpoint）
-    SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-    SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD", "")
+# DATABASE_URLを取得（Render環境では必須）
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    # ローカル開発環境用のフォールバック
+    logger.warning("DATABASE_URL未設定 - SQLiteを使用")
+    DATABASE_URL = "sqlite:///./video_accounting.db"
+else:
+    # URLの一部を隠してログ出力
+    if "pooler.supabase.com" in DATABASE_URL:
+        logger.info("Supabase Pooler接続を使用")
+    elif "supabase.co" in DATABASE_URL:
+        logger.warning("⚠️ Direct接続を使用中 - Pooler接続に変更してください")
     
-    if SUPABASE_URL and SUPABASE_PASSWORD:
-        # Supabase PoolerモードのURL形式
-        # postgresql://postgres.[project-ref]:[password]@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres
-        DATABASE_URL = f"postgresql://postgres.{SUPABASE_URL}:{SUPABASE_PASSWORD}@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require"
-        logger.info("Supabase Pooler接続URL構築完了")
-    elif os.getenv("DATABASE_URL"):
-        # 直接DATABASE_URLが設定されている場合
-        DATABASE_URL = os.getenv("DATABASE_URL")
-        logger.info("DATABASE_URL環境変数を使用")
-
-logger.info(f"データベース接続URL: {DATABASE_URL[:30]}...")
+    # パスワード部分を隠してログ出力
+    safe_url = DATABASE_URL.split('@')[0].split(':')[0] + ":****@" + DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else DATABASE_URL[:50]
+    logger.info(f"データベースURL: {safe_url}")
 
 # SQLite用の調整
 if DATABASE_URL.startswith("sqlite"):

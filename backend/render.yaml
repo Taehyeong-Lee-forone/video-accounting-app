@@ -9,11 +9,7 @@ services:
       - key: RENDER
         value: true
       - key: DATABASE_URL
-        sync: false  # Supabase Pooler URL全体を設定 (推奨)
-      - key: SUPABASE_URL
-        sync: false  # Supabaseプロジェクト参照ID (例: dhbzrmokkyeevuphhkrd)
-      - key: SUPABASE_PASSWORD
-        sync: false  # Supabaseデータベースパスワード
+        sync: false  # 必須: Supabase Pooler URL全体を設定
       - key: GEMINI_API_KEY
         sync: false  # 手動で設定
       - key: UPLOAD_FOLDER
