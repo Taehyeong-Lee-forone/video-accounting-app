@@ -4,7 +4,7 @@ from typing import List
 from datetime import datetime
 
 from database import get_db
-from models import JournalEntry, JournalStatus
+from models import JournalEntry
 from schemas import JournalEntryResponse, JournalEntryUpdate, JournalConfirm
 
 router = APIRouter()
@@ -12,7 +12,7 @@ router = APIRouter()
 @router.get("/", response_model=List[JournalEntryResponse])
 async def list_journals(
     video_id: int = None,
-    status: JournalStatus = None,
+    status: str = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db)
@@ -68,7 +68,7 @@ async def confirm_journal(
     if not journal:
         raise HTTPException(404, "仕訳が見つかりません")
     
-    journal.status = JournalStatus.CONFIRMED
+    journal.status = "confirmed"
     journal.confirmed_by = confirm_data.confirmed_by
     journal.confirmed_at = datetime.utcnow()
     
@@ -87,7 +87,7 @@ async def reject_journal(
     if not journal:
         raise HTTPException(404, "仕訳が見つかりません")
     
-    journal.status = JournalStatus.REJECTED
+    journal.status = "rejected"
     journal.updated_at = datetime.utcnow()
     
     db.commit()
