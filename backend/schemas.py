@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict, field_serializer
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
-from enum import Enum
+# from enum import Enum  # Enum使用を削除
 
 # 日本タイムゾーン定義
 JST = timezone(timedelta(hours=9))
@@ -15,19 +15,20 @@ def to_jst(dt: Optional[datetime]) -> Optional[datetime]:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(JST)
 
-class VideoStatus(str, Enum):
+# Enum定義を定数として保持（参照用）
+class VideoStatus:
     queued = "queued"
     processing = "processing"
     done = "done"
     error = "error"
 
-class JournalStatus(str, Enum):
+class JournalStatus:
     unconfirmed = "unconfirmed"
     confirmed = "confirmed"
     rejected = "rejected"
     pending = "pending"
 
-class DocumentType(str, Enum):
+class DocumentType:
     receipt = "領収書"
     invoice = "請求書"
     slip = "レシート"
@@ -35,7 +36,7 @@ class DocumentType(str, Enum):
     other = "その他"
     composite = "請求書・領収書"  # Temporary: handle composite type
 
-class PaymentMethod(str, Enum):
+class PaymentMethod:
     cash = "現金"
     credit = "クレジット"
     emoney = "電子マネー"
@@ -53,7 +54,7 @@ class VideoResponse(BaseModel):
     gcs_uri: Optional[str] = None
     local_path: Optional[str] = None
     duration_ms: Optional[int] = None
-    status: VideoStatus
+    status: str
     progress: Optional[int] = None
     progress_message: Optional[str] = None
     error_message: Optional[str] = None
@@ -102,25 +103,25 @@ class ReceiptCreate(BaseModel):
     video_id: int
     best_frame_id: int
     vendor: Optional[str] = None
-    document_type: Optional[DocumentType] = None
+    document_type: Optional[str] = None
     issue_date: Optional[datetime] = None
     currency: str = "JPY"
     total: Optional[float] = None
     subtotal: Optional[float] = None
     tax: Optional[float] = None
     tax_rate: Optional[float] = None
-    payment_method: Optional[PaymentMethod] = None
+    payment_method: Optional[str] = None
     memo: Optional[str] = None
 
 class ReceiptUpdate(BaseModel):
     vendor: Optional[str] = None
-    document_type: Optional[DocumentType] = None
+    document_type: Optional[str] = None
     issue_date: Optional[datetime] = None
     total: Optional[float] = None
     subtotal: Optional[float] = None
     tax: Optional[float] = None
     tax_rate: Optional[float] = None
-    payment_method: Optional[PaymentMethod] = None
+    payment_method: Optional[str] = None
     memo: Optional[str] = None
 
 class ReceiptHistoryResponse(BaseModel):
@@ -148,16 +149,16 @@ class ReceiptResponse(BaseModel):
     best_frame_id: Optional[int] = None
     vendor: Optional[str] = None
     vendor_norm: Optional[str] = None
-    document_type: Optional[DocumentType] = None
+    document_type: Optional[str] = None
     issue_date: Optional[datetime] = None
     currency: str
     total: Optional[float] = None
     subtotal: Optional[float] = None
     tax: Optional[float] = None
     tax_rate: Optional[float] = None
-    payment_method: Optional[PaymentMethod] = None
+    payment_method: Optional[str] = None
     duplicate_of_id: Optional[int] = None
-    status: JournalStatus
+    status: str
     is_manual: Optional[bool] = False  # 手動追加フラグ
     memo: Optional[str] = None
     created_at: datetime
@@ -224,7 +225,7 @@ class JournalEntryResponse(BaseModel):
     tax_account: Optional[str] = None
     tax_amount: Optional[float] = None
     memo: Optional[str] = None
-    status: JournalStatus
+    status: str
     confirmed_by: Optional[str] = None
     confirmed_at: Optional[datetime] = None
     created_at: datetime
@@ -261,7 +262,7 @@ class VendorCreate(BaseModel):
     default_debit_account: Optional[str] = None
     default_credit_account: Optional[str] = None
     default_tax_rate: Optional[float] = None
-    default_payment_method: Optional[PaymentMethod] = None
+    default_payment_method: Optional[str] = None
 
 class VendorResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -272,7 +273,7 @@ class VendorResponse(BaseModel):
     default_debit_account: Optional[str] = None
     default_credit_account: Optional[str] = None
     default_tax_rate: Optional[float] = None
-    default_payment_method: Optional[PaymentMethod] = None
+    default_payment_method: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -326,7 +327,7 @@ class VideoDetailResponse(BaseModel):
     gcs_uri: Optional[str] = None
     local_path: Optional[str] = None
     duration_ms: Optional[int] = None
-    status: VideoStatus
+    status: str
     progress: Optional[int] = None
     progress_message: Optional[str] = None
     error_message: Optional[str] = None
