@@ -49,19 +49,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS設定 - 環境変数から取得
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
+# CORS設定 - 開発中は全オリジンを許可
+# 本番環境では特定のドメインのみ許可すること
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins + [
-        "https://*.ngrok-free.app", 
-        "https://*.onrender.com",
-        "https://*.vercel.app",
-        "https://video-accounting-2jmagcyz8-ritehyon-9953s-projects.vercel.app"
-    ],
+    allow_origins=["*"],  # すべてのオリジンを許可（開発用）
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # 静的ファイル - Render環境では/tmpを使用
