@@ -14,6 +14,10 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ポート設定のログ出力
+port = int(os.getenv("PORT", 10000))
+logger.info(f"サーバーポート設定: {port}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -67,3 +71,10 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+# Render環境用のポート設定
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 10000))
+    logger.info(f"Starting server on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)

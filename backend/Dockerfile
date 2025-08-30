@@ -24,8 +24,11 @@ COPY . .
 # Create uploads directory
 RUN mkdir -p /app/uploads
 
-# RenderはPORT環境変数を使用（デフォルト10000）
-EXPOSE ${PORT:-10000}
+# 起動スクリプトに実行権限を付与
+RUN chmod +x /app/start.sh
 
-# Run application - Render.com用
-CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}
+# Renderのポート設定
+EXPOSE 10000
+
+# シェルスクリプトを使用して起動（環境変数を正しく展開）
+CMD ["/bin/sh", "/app/start.sh"]
