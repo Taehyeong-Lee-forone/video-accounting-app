@@ -679,19 +679,38 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
 @router.get("/{video_id}", response_model=VideoDetailResponse)
 async def get_video(video_id: int, db: Session = Depends(get_db)):
     """動画詳細取得"""
-    # receiptsとbest_frame、history関係を一緒にロード
-    video = db.query(Video).options(
-        joinedload(Video.receipts).joinedload(Receipt.best_frame),
-        joinedload(Video.receipts).joinedload(Receipt.history)
-    ).filter(Video.id == video_id).first()
-    if not video:
-        raise HTTPException(404, "動画が見つかりません")
-    
-    # レシートをフレーム時間順にソート
-    if video.receipts:
-        video.receipts.sort(key=lambda r: r.best_frame.time_ms if r.best_frame else 0)
-    
-    return video
+    try:
+        # receiptsとbest_frame、history関係を一緒にロード
+        video = db.query(Video).options(
+            joinedload(Video.receipts).joinedload(Receipt.best_frame),
+            joinedload(Video.receipts).joinedload(Receipt.history)
+        ).filter(Video.id == video_id).first()
+        
+        if not video:
+            raise HTTPException(404, "動画が見つかりません")
+        
+        # レシートをフレーム時間順にソート
+        if video.receipts:
+            try:
+                video.receipts.sort(key=lambda r: r.best_frame.time_ms if r.best_frame else 0)
+            except Exception as e:
+                logger.warning(f"レシートソートエラー: {e}")
+                # ソートできない場合はそのまま返す
+        
+        # frames、receipts、journal_entries属性が存在しない場合は空リストを設定
+        if not hasattr(video, 'frames'):
+            video.frames = []
+        if not hasattr(video, 'receipts'):
+            video.receipts = []
+        if not hasattr(video, 'journal_entries'):
+            video.journal_entries = []
+        
+        return video
+    except HTTPException:
+        raise  # HTTPExceptionはそのまま再送出
+    except Exception as e:
+        logger.error(f"動画詳細取得エラー (video_id={video_id}): {e}", exc_info=True)
+        raise HTTPException(500, f"動画詳細の取得に失敗しました: {str(e)}")
 
 @router.get("/{video_id}/frame/{ms}")
 async def get_frame(video_id: int, ms: int, db: Session = Depends(get_db)):
