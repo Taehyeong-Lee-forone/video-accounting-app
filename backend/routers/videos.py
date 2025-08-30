@@ -143,11 +143,19 @@ async def upload_video(
             filename=file.filename,  # 元のファイル名を保持
             local_path=str(file_path),  # 実際の保存パス
             thumbnail_path=str(thumbnail_path) if thumbnail_path else None,
-            status=VideoStatus.QUEUED
+            status=VideoStatus.QUEUED,
+            progress=0  # 初期進捗を0に設定
         )
         db.add(video)
         db.commit()
         db.refresh(video)
+        
+        # VideoResponseに必要な追加フィールドを設定
+        video.receipts_count = 0
+        video.auto_receipts_count = 0
+        video.manual_receipts_count = 0
+        
+        logger.info(f"ビデオDB登録成功: ID={video.id}")
         
         return video
         
