@@ -1,6 +1,10 @@
 import axios from 'axios'
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+// Production API URL을 직접 설정 (환경 변수가 작동하지 않을 경우를 대비)
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || 
+  (process.env.NODE_ENV === 'production' 
+    ? 'https://video-accounting-app.onrender.com' 
+    : 'http://localhost:5001')
 
 export const api = axios.create({
   baseURL: API_URL,

@@ -1,14 +1,12 @@
 {
   "buildCommand": "npm run build",
-  "outputDirectory": "build",
-  "framework": "create-react-app",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ],
+  "framework": "nextjs",
   "env": {
-    "REACT_APP_API_URL": "https://video-accounting-app.onrender.com"
+    "NEXT_PUBLIC_API_URL": "https://video-accounting-app.onrender.com"
+  },
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_API_URL": "https://video-accounting-app.onrender.com"
+    }
   }
 }
