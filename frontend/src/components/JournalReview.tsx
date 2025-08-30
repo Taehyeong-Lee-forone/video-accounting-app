@@ -143,12 +143,12 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
         }, 100)
       } else {
         console.log('Video ref is null')
-        toast.warning('ビデオプレーヤーが準備できていません')
+        toast.error('ビデオプレーヤーが準備できていません')
       }
     } else {
       console.log('No valid time_ms in best_frame, receipt:', receipt)
       // time_msがない場合も選択状態にはする
-      toast.info('この領収書にはタイムスタンプがありません')
+      toast('この領収書にはタイムスタンプがありません')
     }
     
     // 領収書クリック時にモーダルは開かない（ビデオシークのみ実行）
@@ -258,7 +258,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
           refetchJournals()
         ])
       } else {
-        toast.warning('この位置に領収書データが見つかりませんでした')
+        toast('この位置に領収書データが見つかりませんでした')
       }
     } catch (error: any) {
       console.error('Frame analysis error:', error)

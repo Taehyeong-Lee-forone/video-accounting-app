@@ -1,5 +1,9 @@
 # Render 배포 가이드
 
+## 중요: 환경 변수 설정 필수! (Render Dashboard)
+
+⚠️ **반드시 Render Dashboard에서 환경 변수를 설정해야 합니다!**
+
 ## 환경 변수 설정 (Render Dashboard)
 
 Render 대시보드에서 다음 환경 변수를 수동으로 설정해야 합니다:

@@ -11,7 +11,7 @@ import toast from 'react-hot-toast'
 import { useVideoProgress } from '@/hooks/useVideoProgress'
 import type { Video } from '@/types/video'
 
-const statusConfig = {
+const statusConfig: Record<string, { label: string; icon: typeof ClockIcon; color: string }> = {
   queued: { label: '待機中', icon: ClockIcon, color: 'text-gray-500' },
   processing: { label: '処理中', icon: ClockIcon, color: 'text-blue-500' },
   done: { label: '完了', icon: CheckCircleIcon, color: 'text-green-500' },
@@ -37,7 +37,7 @@ export default function VideoList() {
   useEffect(() => {
     if (!videos) return
     
-    const processingVideo = videos.find(video => 
+    const processingVideo = videos.find((video: any) => 
       video.status === 'processing' || video.status === 'PROCESSING'
     )
     

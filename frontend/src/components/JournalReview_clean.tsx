@@ -147,7 +147,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
         toast.success(`フレーム分析完了: ${timeMs}ms`)
         window.location.reload()
       } else {
-        toast.warning('領収書データを抽出できませんでした')
+        toast('領収書データを抽出できませんでした')
       }
     } catch (error: any) {
       console.error('Frame analysis error:', error)

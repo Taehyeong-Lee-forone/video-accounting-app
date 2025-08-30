@@ -47,14 +47,14 @@ export default function JournalTable({
     setEditData({})
   }
 
-  const statusColors = {
+  const statusColors: Record<string, string> = {
     unconfirmed: 'bg-yellow-100 text-yellow-800',
     confirmed: 'bg-green-100 text-green-800',
     rejected: 'bg-red-100 text-red-800',
     pending: 'bg-gray-100 text-gray-800'
   }
 
-  const statusLabels = {
+  const statusLabels: Record<string, string> = {
     unconfirmed: '未確認',
     confirmed: '確認済',
     rejected: '差戻し',

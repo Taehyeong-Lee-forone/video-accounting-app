@@ -171,7 +171,7 @@ export default function ReceiptJournalModal({
           await handleCreateNewReceiptDirect(response.data.receipt_data)
         }
       } else {
-        toast.warning('領収書データが検出されませんでした')
+        toast('領収書データが検出されませんでした')
       }
     } catch (error: any) {
       console.error('OCR preview error:', error)
@@ -463,7 +463,7 @@ export default function ReceiptJournalModal({
 
   const handleToggleConfirm = async () => {
     if (!journal) {
-      toast.warning('仕訳データがありません')
+      toast('仕訳データがありません')
       return
     }
     
