@@ -51,7 +51,12 @@ app = FastAPI(
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins + ["https://*.ngrok-free.app", "https://*.onrender.com"],
+    allow_origins=cors_origins + [
+        "https://*.ngrok-free.app", 
+        "https://*.onrender.com",
+        "https://*.vercel.app",
+        "https://video-accounting-2jmagcyz8-ritehyon-9953s-projects.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
