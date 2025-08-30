@@ -188,8 +188,8 @@ class JournalGenerator:
     
     def _get_frame_time(self, receipt: Receipt) -> int:
         """レシートのベストフレーム時刻を取得"""
-        if receipt.best_frame:
-            return receipt.best_frame.time_ms
+        if receipt.best_frame and receipt.best_frame.time_ms is not None:
+            return int(receipt.best_frame.time_ms)
         return 0
     
     def apply_confirmation(self, journal_id: int, confirmed_by: str, status: str = 'confirmed') -> JournalEntry:

@@ -318,7 +318,7 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
                     journal_entry = JournalEntry(
                         receipt_id=entry_data.receipt_id,
                         video_id=entry_data.video_id,
-                        time_ms=receipt.best_frame.time_ms if receipt.best_frame else 0,
+                        time_ms=int(receipt.best_frame.time_ms) if receipt.best_frame and receipt.best_frame.time_ms is not None else 0,
                         debit_account=entry_data.debit_account,
                         credit_account=entry_data.credit_account,
                         debit_amount=entry_data.debit_amount,
@@ -644,7 +644,7 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
                         journal_entry = JournalEntry(
                             receipt_id=entry_data.receipt_id,
                             video_id=entry_data.video_id,
-                            time_ms=entry_data.time_ms,
+                            time_ms=int(entry_data.time_ms) if entry_data.time_ms is not None else 0,
                             debit_account=entry_data.debit_account,
                             credit_account=entry_data.credit_account,
                             debit_amount=entry_data.debit_amount,
@@ -1098,7 +1098,7 @@ async def analyze_frame_at_time(
                 journal_entry = JournalEntry(
                     receipt_id=entry_data.receipt_id,
                     video_id=entry_data.video_id,
-                    time_ms=entry_data.time_ms,
+                    time_ms=int(entry_data.time_ms) if entry_data.time_ms is not None else 0,
                     debit_account=entry_data.debit_account,
                     credit_account=entry_data.credit_account,
                     debit_amount=entry_data.debit_amount,
