@@ -9,7 +9,7 @@ import logging
 import cv2
 
 from database import get_db
-from models import Video, Frame, Receipt, VideoStatus, JournalEntry, ReceiptHistory
+from models import Video, Frame, Receipt, JournalEntry, ReceiptHistory
 from schemas import VideoResponse, VideoDetailResponse, VideoAnalyzeRequest, FrameResponse, ReceiptUpdate
 from services.video_intelligence import VideoAnalyzer
 from services.journal_generator import JournalGenerator
