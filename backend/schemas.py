@@ -209,7 +209,7 @@ class JournalEntryUpdate(BaseModel):
     tax_account: Optional[str] = None
     tax_amount: Optional[float] = None
     memo: Optional[str] = None
-    status: Optional[JournalStatus] = None
+    status: Optional[str] = None
 
 class JournalEntryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
