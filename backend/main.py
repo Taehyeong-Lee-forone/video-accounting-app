@@ -88,6 +88,11 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+@app.options("/videos/")
+async def video_upload_options():
+    """CORS preflight用"""
+    return {"status": "ok"}
+
 # Render環境用のポート設定
 if __name__ == "__main__":
     import uvicorn

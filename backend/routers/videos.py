@@ -27,12 +27,23 @@ async def upload_video(
 ):
     """動画アップロード"""
     try:
+        logger.info(f"アップロード開始: {file.filename}, Content-Type: {file.content_type}")
+        
         # ファイル検証
-        if not file.filename.endswith(('.mp4', '.mov', '.avi')):
+        if not file.filename.endswith(('.mp4', '.mov', '.avi', '.webm', '.mkv')):
+            logger.error(f"サポートされていないファイル形式: {file.filename}")
             raise HTTPException(400, "サポートされていないファイル形式です")
         
-        if file.size > 500 * 1024 * 1024:  # 500MB制限
-            raise HTTPException(400, "ファイルサイズが大きすぎます（最大500MB）")
+        # ファイルサイズ確認
+        file_content = await file.read()
+        file_size = len(file_content)
+        await file.seek(0)  # ファイルポインタをリセット
+        
+        logger.info(f"ファイルサイズ: {file_size / 1024 / 1024:.2f}MB")
+        
+        if file_size > 100 * 1024 * 1024:  # 100MB制限に変更（Renderの制限）
+            logger.error(f"ファイルサイズが大きすぎます: {file_size / 1024 / 1024:.2f}MB")
+            raise HTTPException(400, "ファイルサイズが大きすぎます（最大100MB）")
         
         # ファイル保存 - Render環境では/tmpを使用
         base_dir = Path("/tmp") if os.getenv("RENDER") == "true" else Path("uploads")
@@ -90,8 +101,13 @@ async def upload_video(
         
         return video
         
+    except HTTPException:
+        raise  # HTTPExceptionはそのまま再送出
     except Exception as e:
-        logger.error(f"動画アップロードエラー: {e}")
+        logger.error(f"動画アップロードエラー: {e}", exc_info=True)
+        import traceback
+        error_detail = traceback.format_exc()
+        logger.error(f"詳細エラー: {error_detail}")
         raise HTTPException(500, f"アップロードに失敗しました: {str(e)}")
 
 @router.post("/{video_id}/analyze")
