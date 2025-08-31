@@ -89,6 +89,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   }
 
   const handleReceiptClick = (receipt: any) => {
+    console.log('=== handleReceiptClick called ===')
     console.log('Receipt clicked:', receipt)
     console.log('Receipt ID:', receipt?.id)
     console.log('best_frame:', receipt?.best_frame)
@@ -107,6 +108,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     if (receipt.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== null) {
       const seconds = receipt.best_frame.time_ms / 1000
       console.log('Attempting to seek to:', seconds, 'seconds from', receipt.best_frame.time_ms, 'ms')
+      console.log('videoRef.current:', videoRef.current)
       
       if (videoRef.current) {
         console.log('Video element found, current time before:', videoRef.current.currentTime)
@@ -576,7 +578,11 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                             className={`p-3 cursor-pointer transition-all hover:bg-gray-50 ${
                               selectedReceipt?.id === receipt.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
                             }`}
-                            onClick={() => {
+                            onClick={(e) => {
+                              // 削除ボタンがクリックされた場合は処理しない
+                              if ((e.target as HTMLElement).closest('button')) {
+                                return;
+                              }
                               console.log('=== Receipt List Item Click ===')
                               console.log('Receipt ID:', receipt?.id)
                               console.log('Receipt vendor:', receipt?.vendor)
@@ -600,7 +606,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                                 </div>
                             {receipt.best_frame && (
                               <img 
-                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/videos/frames/${receipt.best_frame.id}/image`}
+                                src={`${API_URL}/videos/frames/${receipt.best_frame.id}/image`}
                                 alt="Receipt"
                                 className="w-16 h-12 object-cover rounded mt-2 border"
                                 onError={(e) => {
