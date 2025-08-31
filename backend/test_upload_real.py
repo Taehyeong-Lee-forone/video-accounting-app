@@ -17,7 +17,7 @@ def test_real_upload():
     
     # ログイン
     login_response = requests.post(
-        f"{BASE_URL}/api/auth/login",
+        f"{BASE_URL}/auth/login",  # /api なし
         data={
             "username": "admin",
             "password": "admin123"
@@ -25,7 +25,8 @@ def test_real_upload():
     )
     
     if login_response.status_code != 200:
-        print("❌ ログイン失敗")
+        print(f"❌ ログイン失敗: {login_response.status_code}")
+        print(f"   Response: {login_response.text[:200]}")
         return
     
     token = login_response.json()['access_token']
@@ -51,7 +52,7 @@ def test_real_upload():
     with open(video_file, 'rb') as f:
         files = {'file': (filename, f, 'video/mp4')}
         response = requests.post(
-            f"{BASE_URL}/videos/upload",
+            f"{BASE_URL}/videos/",  # 正しいエンドポイント (/api なし)
             headers=headers,
             files=files,
             timeout=60  # 60秒タイムアウト
@@ -74,7 +75,7 @@ def test_real_upload():
         
         while time.time() - start_time < 30:
             detail_response = requests.get(
-                f"{BASE_URL}/videos/{video_id}",
+                f"{BASE_URL}/videos/{video_id}",  # /api なし
                 headers=headers
             )
             

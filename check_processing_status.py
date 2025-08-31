@@ -15,7 +15,7 @@ def check_processing_videos():
     
     # admin でログイン
     login_response = requests.post(
-        f"{BASE_URL}/api/auth/login",
+        f"{BASE_URL}/auth/login",
         data={
             "username": "admin",
             "password": "admin123"
@@ -64,7 +64,7 @@ def monitor_latest_video():
     
     # admin でログイン
     login_response = requests.post(
-        f"{BASE_URL}/api/auth/login",
+        f"{BASE_URL}/auth/login",
         data={
             "username": "admin",
             "password": "admin123"
