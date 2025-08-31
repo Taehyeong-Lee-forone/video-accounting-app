@@ -27,6 +27,35 @@ async def lifespan(app: FastAPI):
         logger.info("データベーステーブルを確認中...")
         Base.metadata.create_all(bind=engine, checkfirst=True)
         logger.info("データベース初期化完了")
+        
+        # 初回起動時のadminユーザー作成
+        from sqlalchemy.orm import Session
+        from models import User
+        from passlib.context import CryptContext
+        
+        pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
+        session = Session(engine)
+        
+        try:
+            admin = session.query(User).filter_by(username='admin').first()
+            if not admin:
+                logger.info("Creating default admin user...")
+                admin = User(
+                    email='admin@example.com',
+                    username='admin',
+                    hashed_password=pwd_context.hash('admin123'),
+                    full_name='Administrator',
+                    is_superuser=True,
+                    is_active=True
+                )
+                session.add(admin)
+                session.commit()
+                logger.info("✅ Admin user created (username: admin, password: admin123)")
+            else:
+                logger.info("Admin user already exists")
+        finally:
+            session.close()
+            
     except Exception as e:
         logger.warning(f"データベース初期化警告: {e}")
         # エラーが発生してもアプリケーションは続行
