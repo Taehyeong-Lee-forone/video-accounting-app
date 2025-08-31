@@ -181,6 +181,16 @@ class VisionOCRService:
             'raw_text': full_text
         }
         
+        # 手書き文書の検出
+        if self._is_handwritten_document(full_text, ocr_result):
+            logger.warning("Handwritten document detected, applying stricter validation")
+            # 手書き文書の場合、より厳格な検証
+            if receipt_data['total'] and receipt_data['total'] > 100000:  # 10万円超
+                logger.warning(f"Handwritten doc with large amount: {receipt_data['total']}, reducing confidence")
+                # 手書きで大金額は疑わしいので、金額を制限
+                receipt_data['total'] = None
+                receipt_data['tax'] = None
+        
         # 고급 파서가 이미 tax_rate를 계산했으므로, 추가 계산은 불필요
         # 파서가 실패한 경우만 폴백
         if not receipt_data['tax_rate'] and receipt_data['total'] and receipt_data['tax']:
@@ -192,6 +202,9 @@ class VisionOCRService:
             else:
                 receipt_data['tax_rate'] = 0.10  # デフォルト値
         
+        # 最終検証
+        receipt_data = self._validate_receipt_data(receipt_data)
+        
         return receipt_data
     
     def _extract_vendor(self, text: str) -> Optional[str]:
@@ -201,11 +214,20 @@ class VisionOCRService:
         # 除外すべきキーワード（基本的なもののみ）
         exclude_keywords = [
             '領収証', '領収書', 'レシート', '計算', '御買上', 
-            '売上票', 'お買い上げ', '納品書', '請求書', 'RECEIPT',
+            '売上票', 'お買い上け', '納品書', '請求書', 'RECEIPT',
             '登録番号', 'T5010002022488', '明細', '控え',
             '但し', 'として', '内訳', '合計', '小計',
             '印紙', '収入印紙', '税込', '税抜', '内税',
             '下記の', '下記', '上記', '以下', '以上'  # 指示語も除外
+        ]
+        
+        # 無効な店舗名パターン（日付や異常な形式）
+        invalid_patterns = [
+            r'\d+月\d+日',  # 「12月25日」のような日付
+            r'\d{2,}月',     # 「72月」のような異常な月
+            r'^\d+日$',      # 数字+「日」だけ
+            r'^[\d\.]+$',    # 数字だけ
+            r'^[=\-\+\*\/]+',  # 記号で始まる
         ]
         
         # 優先順位リスト（高い順）
@@ -264,13 +286,30 @@ class VisionOCRService:
         # 優先順位でソートして最初のものを返す
         if candidates:
             candidates.sort(key=lambda x: x[0])
-            return candidates[0][1]
+            
+            # 最終候補を検証
+            for _, vendor_name in candidates:
+                # 無効なパターンチェック
+                is_invalid = False
+                for pattern in invalid_patterns:
+                    if re.search(pattern, vendor_name):
+                        logger.warning(f"Invalid vendor name pattern detected: {vendor_name}")
+                        is_invalid = True
+                        break
+                
+                # 長さチェック（2文字以上、50文字以下）
+                if len(vendor_name) < 2 or len(vendor_name) > 50:
+                    logger.warning(f"Invalid vendor name length: {vendor_name}")
+                    is_invalid = True
+                
+                if not is_invalid:
+                    return vendor_name
         
         # 何も見つからない場合は「Unknown」を返す（Noneだと保存されない）
         return "Unknown"
     
     def _extract_amount(self, text: str, patterns: list) -> Optional[float]:
-        """金額抽出"""
+        """金額抽出 - 異常値検証付き"""
         for pattern in patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
             if matches:
@@ -278,7 +317,23 @@ class VisionOCRService:
                 amount_str = matches[0]
                 amount_str = re.sub(r'[¥￥,円]', '', amount_str)
                 try:
-                    return float(amount_str)
+                    amount = float(amount_str)
+                    
+                    # 金額の妥当性チェック
+                    # 一般的な領収書は100万円未満が多い
+                    if amount > 1000000:  # 100万円超
+                        logger.warning(f"Suspiciously large amount detected: {amount}")
+                        # 10万円を超える場合は警告だけ出して続行
+                        # （大きな買い物もあるため完全には除外しない）
+                        if amount > 10000000:  # 1000万円超は異常値として除外
+                            logger.error(f"Amount too large, skipping: {amount}")
+                            continue
+                    
+                    if amount <= 0:
+                        logger.warning(f"Invalid amount (zero or negative): {amount}")
+                        continue
+                    
+                    return amount
                 except:
                     continue
         return None
@@ -344,6 +399,59 @@ class VisionOCRService:
                 return doc_type
         
         return 'レシート'  # デフォルト値
+    
+    def _is_handwritten_document(self, text: str, ocr_result: Dict[str, Any]) -> bool:
+        """手書き文書の検出"""
+        # 手書き文書の特徴
+        handwritten_indicators = [
+            '計算領収証',  # 手書き計算書でよく使われる
+            '計算（領収証）',
+            '様',  # 手書きでよく使われる敬称（ただし一般的すぎるので他の条件と組み合わせ）
+        ]
+        
+        # OCR confidence scoreが低い場合
+        blocks = ocr_result.get('blocks', [])
+        if blocks:
+            avg_confidence = sum(b.get('confidence', 0) for b in blocks) / len(blocks)
+            if avg_confidence < 0.8:  # 80%未満は手書きの可能性
+                return True
+        
+        # 手書き指標が複数ある場合
+        indicator_count = sum(1 for indicator in handwritten_indicators if indicator in text)
+        if indicator_count >= 2:
+            return True
+        
+        # テキストが乱れている（改行が多い、短い行が多い）
+        lines = text.split('\n')
+        short_lines = sum(1 for line in lines if 0 < len(line.strip()) < 3)
+        if len(lines) > 0 and short_lines / len(lines) > 0.5:  # 50%以上が短い行
+            return True
+        
+        return False
+    
+    def _validate_receipt_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """レシートデータの最終検証と修正"""
+        # 税額が総額を超える場合は無効
+        if data.get('tax') and data.get('total'):
+            if data['tax'] > data['total']:
+                logger.error(f"Tax amount {data['tax']} exceeds total {data['total']}, clearing tax")
+                data['tax'] = None
+                data['tax_rate'] = None
+        
+        # 小計が総額を超える場合は無効
+        if data.get('subtotal') and data.get('total'):
+            if data['subtotal'] > data['total']:
+                logger.error(f"Subtotal {data['subtotal']} exceeds total {data['total']}, clearing subtotal")
+                data['subtotal'] = None
+        
+        # 店舗名が「Unknown」で金額が大きい場合は疑わしい
+        if data.get('vendor') == 'Unknown' and data.get('total'):
+            if data['total'] > 50000:  # 5万円超
+                logger.warning(f"Unknown vendor with large amount {data['total']}, flagging as suspicious")
+                # メモに警告を追加
+                data['memo'] = (data.get('memo', '') + ' [自動検証:店舗名不明の高額取引]').strip()
+        
+        return data
 
     async def extract_receipt_data(self, image_path: str, ocr_text: str = None) -> Dict[str, Any]:
         """
