@@ -1707,7 +1707,7 @@ def process_video_ocr_sync(video_id: int, db: Session):
     """
     import time
     start_time = time.time()
-    max_processing_time = 120  # 最大2分（Render環境を考慮）
+    max_processing_time = 180  # 最大3分
     
     logger.info(f"OCR処理開始: Video ID {video_id}")
     
@@ -1764,8 +1764,8 @@ def process_video_ocr_sync(video_id: int, db: Session):
         
         # スマートフレーム抽出（品質ベース選別）
         extracted_frames = []
-        max_final_frames = 10  # 最終的に処理する最大フレーム数（大幅削減で速度改善）
-        sample_interval = 2.0  # 2秒ごとにサンプリング（処理速度優先）
+        max_final_frames = 15  # 最終的に処理する最大フレーム数
+        sample_interval = 1.5  # 1.5秒ごとにサンプリング
         
         # 1. 初期サンプリング：1秒ごとにフレーム候補を収集
         candidate_frames = []
@@ -1884,14 +1884,38 @@ def process_video_ocr_sync(video_id: int, db: Session):
                 if ocr_text and len(ocr_text) > 50:  # 最小文字数チェック
                     logger.info(f"Frame {i}: Processing OCR text (first 100 chars): {ocr_text[:100]}")
                     
-                    # パターンマッチングで領収書データを抽出（AIはスキップして速度改善）
+                    # AIを使用して領収書データを抽出
                     receipt_data = None
                     try:
-                        receipt_data = extract_receipt_info_from_text(ocr_text)
-                        if receipt_data:
-                            logger.info(f"Frame {i}: パターンマッチング成功: vendor={receipt_data.get('vendor')}, total={receipt_data.get('total')}")
+                        # Gemini APIで領収書データ抽出（同期版）
+                        import asyncio
+                        try:
+                            loop = asyncio.get_event_loop()
+                        except RuntimeError:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                        
+                        try:
+                            receipt_data = loop.run_until_complete(
+                                analyzer.extract_receipt_data(frame_info['path'], ocr_text)
+                            )
+                            if receipt_data:
+                                logger.info(f"Frame {i}: AI解析成功: vendor={receipt_data.get('vendor')}, total={receipt_data.get('total')}")
+                        except Exception as ai_error:
+                            logger.warning(f"Frame {i}: AI解析エラー: {ai_error}")
+                            import traceback
+                            logger.error(f"AI解析エラー詳細: {traceback.format_exc()}")
                     except Exception as e:
-                        logger.warning(f"Frame {i}: パターンマッチング失敗: {e}")
+                        logger.warning(f"Frame {i}: AI解析失敗: {e}")
+                    
+                    # フォールバック：パターンマッチング
+                    if not receipt_data:
+                        try:
+                            receipt_data = extract_receipt_info_from_text(ocr_text)
+                            if receipt_data:
+                                logger.info(f"Frame {i}: パターンマッチング成功")
+                        except Exception as pm_error:
+                            logger.warning(f"Frame {i}: パターンマッチングエラー: {pm_error}")
                     
                     if receipt_data and receipt_data.get('vendor'):
                         # Frameオブジェクトを作成
@@ -1900,19 +1924,27 @@ def process_video_ocr_sync(video_id: int, db: Session):
                         if os.getenv("RENDER") == "true":
                             db_frame_path = db_frame_path.replace("/tmp/", "uploads/")
                         
-                        frame_obj = Frame(
-                            video_id=video_id,
-                            time_ms=frame_info['time_ms'],
-                            frame_path=db_frame_path,
-                            ocr_text=ocr_text,
-                            frame_score=frame_info.get('quality_score', 0),  # 品質スコアを保存
-                            sharpness=frame_info.get('sharpness', 0),
-                            brightness=frame_info.get('brightness', 0),
-                            contrast=frame_info.get('contrast', 0),
-                            is_best=True
-                        )
-                        db.add(frame_obj)
-                        db.flush()  # IDを取得
+                        try:
+                            logger.info(f"Frameオブジェクト作成中: video_id={video_id}, time_ms={frame_info['time_ms']}")
+                            frame_obj = Frame(
+                                video_id=video_id,
+                                time_ms=frame_info['time_ms'],
+                                frame_path=db_frame_path,
+                                ocr_text=ocr_text,
+                                frame_score=frame_info.get('quality_score', 0),  # 品質スコアを保存
+                                sharpness=frame_info.get('sharpness', 0),
+                                brightness=frame_info.get('brightness', 0),
+                                contrast=frame_info.get('contrast', 0),
+                                is_best=True
+                            )
+                            db.add(frame_obj)
+                            db.flush()  # IDを取得
+                            logger.info(f"Frameオブジェクト保存成功: frame_id={frame_obj.id}")
+                        except Exception as frame_error:
+                            logger.error(f"Frame保存エラー: {frame_error}")
+                            import traceback
+                            logger.error(f"Frame保存エラー詳細: {traceback.format_exc()}")
+                            continue
                         
                         # 領収書データ保存
                         from datetime import datetime
@@ -1928,46 +1960,74 @@ def process_video_ocr_sync(video_id: int, db: Session):
                             issue_date = datetime.now()
                         
                         # Receipt作成（正しいフィールド名を使用）
-                        receipt = Receipt(
-                            video_id=video_id,
-                            best_frame_id=frame_obj.id,
-                            vendor=receipt_data.get('vendor'),
-                            vendor_norm=receipt_data.get('vendor', '').lower().replace(' ', ''),
-                            document_type=receipt_data.get('document_type', 'レシート'),
-                            issue_date=issue_date,
-                            currency=receipt_data.get('currency', 'JPY'),
-                            total=receipt_data.get('total', 0),
-                            subtotal=receipt_data.get('subtotal', 0),
-                            tax=receipt_data.get('tax', 0),
-                            tax_rate=receipt_data.get('tax_rate', 0.1),
-                            payment_method=receipt_data.get('payment_method', '現金'),
-                            is_manual=False
-                        )
-                        db.add(receipt)
-                        db.commit()
+                        try:
+                            # document_typeの検証
+                            doc_type = receipt_data.get('document_type', 'レシート')
+                            if doc_type not in ['領収書', '請求書', 'レシート', '見積書', 'その他', '請求書・領収書']:
+                                doc_type = 'レシート'
+                            
+                            # payment_methodの検証
+                            payment = receipt_data.get('payment_method', '現金')
+                            if payment not in ['現金', 'クレジット', '電子マネー', '不明']:
+                                payment = '現金'
+                            
+                            logger.info(f"Receipt作成中: vendor={receipt_data.get('vendor')}, doc_type={doc_type}, payment={payment}")
+                            
+                            receipt = Receipt(
+                                video_id=video_id,
+                                best_frame_id=frame_obj.id,
+                                vendor=receipt_data.get('vendor'),
+                                vendor_norm=receipt_data.get('vendor', '').lower().replace(' ', ''),
+                                document_type=doc_type,
+                                issue_date=issue_date,
+                                currency=receipt_data.get('currency', 'JPY'),
+                                total=receipt_data.get('total', 0),
+                                subtotal=receipt_data.get('subtotal', 0),
+                                tax=receipt_data.get('tax', 0),
+                                tax_rate=receipt_data.get('tax_rate', 0.1),
+                                payment_method=payment,
+                                is_manual=False
+                            )
+                            db.add(receipt)
+                            db.commit()
+                            logger.info(f"Receipt保存成功: receipt_id={receipt.id}")
+                        except Exception as receipt_error:
+                            logger.error(f"Receipt保存エラー: {receipt_error}")
+                            import traceback
+                            logger.error(f"Receipt保存エラー詳細: {traceback.format_exc()}")
+                            db.rollback()
+                            continue
                         
                         receipts_found += 1
                         logger.info(f"Receipt found: {receipt.vendor} - ¥{receipt.total}")
                         
                         # 仕訳データ生成
-                        generator = JournalGenerator(db)
-                        journal_entries = generator.generate_journal_entries(receipt)
-                        for entry_data in journal_entries:
-                            journal_entry = JournalEntry(
-                                receipt_id=entry_data.receipt_id,
-                                video_id=entry_data.video_id,
-                                time_ms=frame_info['time_ms'],
-                                debit_account=entry_data.debit_account,
-                                credit_account=entry_data.credit_account,
-                                debit_amount=entry_data.debit_amount,
-                                credit_amount=entry_data.credit_amount,
-                                tax_account=entry_data.tax_account,
-                                tax_amount=entry_data.tax_amount,
-                                memo=entry_data.memo,
-                                status='unconfirmed'
-                            )
-                            db.add(journal_entry)
-                        db.commit()
+                        try:
+                            logger.info(f"仕訳データ生成中: receipt_id={receipt.id}")
+                            generator = JournalGenerator(db)
+                            journal_entries = generator.generate_journal_entries(receipt)
+                            for entry_data in journal_entries:
+                                journal_entry = JournalEntry(
+                                    receipt_id=entry_data.receipt_id,
+                                    video_id=entry_data.video_id,
+                                    time_ms=frame_info['time_ms'],
+                                    debit_account=entry_data.debit_account,
+                                    credit_account=entry_data.credit_account,
+                                    debit_amount=entry_data.debit_amount,
+                                    credit_amount=entry_data.credit_amount,
+                                    tax_account=entry_data.tax_account,
+                                    tax_amount=entry_data.tax_amount,
+                                    memo=entry_data.memo,
+                                    status='unconfirmed'
+                                )
+                                db.add(journal_entry)
+                            db.commit()
+                            logger.info(f"仕訳データ保存成功")
+                        except Exception as journal_error:
+                            logger.error(f"仕訳生成エラー: {journal_error}")
+                            import traceback
+                            logger.error(f"仕訳生成エラー詳細: {traceback.format_exc()}")
+                            db.rollback()
                 
             except Exception as e:
                 logger.error(f"Frame {i} processing error: {e}")
