@@ -66,14 +66,12 @@ export default function Navigation() {
                 </button>
               </>
             )}
-            {!isAuthenticated && (
-              <Link
-                href="/login"
-                className="ml-4 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
-              >
-                ログイン
-              </Link>
-            )}
+            <Link
+              href="/app"
+              className="ml-4 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              始める
+            </Link>
           </div>
         </div>
       </div>

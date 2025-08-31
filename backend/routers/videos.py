@@ -47,6 +47,7 @@ async def test_upload():
 @router.post("/", response_model=VideoResponse)
 async def upload_video(
     file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db)
 ):
     """動画アップロード"""
@@ -143,8 +144,8 @@ async def upload_video(
             filename=file.filename,  # 元のファイル名を保持
             local_path=str(file_path),  # 実際の保存パス
             thumbnail_path=str(thumbnail_path) if thumbnail_path else None,
-            status="queued",  # 文字列値を直接使用
-            progress=0  # 初期進捗を0に設定
+            status="processing",  # 自動的に処理開始
+            progress=10  # 初期進捗を10に設定
         )
         db.add(video)
         db.commit()
@@ -156,6 +157,17 @@ async def upload_video(
         video.manual_receipts_count = 0
         
         logger.info(f"ビデオDB登録成功: ID={video.id}")
+        
+        # バックグラウンドで自動処理開始
+        try:
+            from services.video_processor import process_video_background
+            background_tasks.add_task(process_video_background, video.id, db)
+            logger.info(f"バックグラウンド処理開始: ID={video.id}")
+        except Exception as e:
+            logger.error(f"バックグラウンド処理開始エラー: {e}")
+            # エラーでも動画は保存されているので続行
+            video.status = "done"  # 処理をスキップして完了扱い
+            db.commit()
         
         return video
         
