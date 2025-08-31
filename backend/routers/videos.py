@@ -1707,7 +1707,7 @@ def process_video_ocr_sync(video_id: int, db: Session):
     """
     import time
     start_time = time.time()
-    max_processing_time = 300  # 最大5分（十分な処理時間）
+    max_processing_time = 120  # 最大2分（Render環境を考慮）
     
     logger.info(f"OCR処理開始: Video ID {video_id}")
     
@@ -1764,8 +1764,8 @@ def process_video_ocr_sync(video_id: int, db: Session):
         
         # スマートフレーム抽出（品質ベース選別）
         extracted_frames = []
-        max_final_frames = 20  # 最終的に処理する最大フレーム数（処理速度改善のため削減）
-        sample_interval = 1.0  # 1秒ごとにサンプリング（処理速度改善）
+        max_final_frames = 10  # 最終的に処理する最大フレーム数（大幅削減で速度改善）
+        sample_interval = 2.0  # 2秒ごとにサンプリング（処理速度優先）
         
         # 1. 初期サンプリング：1秒ごとにフレーム候補を収集
         candidate_frames = []
@@ -1884,29 +1884,14 @@ def process_video_ocr_sync(video_id: int, db: Session):
                 if ocr_text and len(ocr_text) > 50:  # 最小文字数チェック
                     logger.info(f"Frame {i}: Processing OCR text (first 100 chars): {ocr_text[:100]}")
                     
-                    # AIを使用して領収書データを抽出
+                    # パターンマッチングで領収書データを抽出（AIはスキップして速度改善）
                     receipt_data = None
                     try:
-                        # Gemini APIで領収書データ抽出（同期版）
-                        import asyncio
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        receipt_data = loop.run_until_complete(
-                            analyzer.extract_receipt_data(frame_info['path'], ocr_text)
-                        )
-                        loop.close()
-                        
+                        receipt_data = extract_receipt_info_from_text(ocr_text)
                         if receipt_data:
-                            logger.info(f"Frame {i}: AI解析成功: vendor={receipt_data.get('vendor')}, total={receipt_data.get('total')}")
+                            logger.info(f"Frame {i}: パターンマッチング成功: vendor={receipt_data.get('vendor')}, total={receipt_data.get('total')}")
                     except Exception as e:
-                        logger.warning(f"Frame {i}: AI解析失敗: {e}")
-                        # フォールバック：パターンマッチング
-                        try:
-                            receipt_data = extract_receipt_info_from_text(ocr_text)
-                            if receipt_data:
-                                logger.info(f"Frame {i}: パターンマッチング成功")
-                        except:
-                            pass
+                        logger.warning(f"Frame {i}: パターンマッチング失敗: {e}")
                     
                     if receipt_data and receipt_data.get('vendor'):
                         # Frameオブジェクトを作成
