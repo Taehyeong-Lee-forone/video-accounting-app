@@ -640,16 +640,28 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
                 invalid_vendors = ['sample', 'test', 'unknown', 'ocr failed', 'sample store']
                 vendor_normalized = vendor.lower().replace(' ', '').replace('(', '').replace(')', '').replace('（', '').replace('）', '')
                 
+                # 数字のみの販売店名を除外
+                vendor_clean = vendor.replace(' ', '').replace('/', '').replace('-', '')
+                if vendor_clean.isdigit():
+                    logger.warning(f"Vendor name is all digits, skipping: {vendor}")
+                    continue
+                
                 # ラインアイテム有効性チェック
                 line_items = receipt_data.get('line_items', [])
                 valid_line_items = [item for item in line_items if item and item.get('name') and item.get('name') != '不明']
                 
-                # より緩い条件：金額があり、極端に無効でなければ保存
+                # より厳格な条件：金額があり、極端に無効でなければ保存
                 if (len(vendor) < 1 or  # 販売店名が空
                     any(invalid in vendor_normalized for invalid in invalid_vendors) or  # 明らかに無効な販売店
                     not total or total <= 0 or  # 金額がないか0円
                     total > 10000000):  # 非現実的に大きい金額（1000万円超）
+                    logger.error(f"Invalid receipt data detected: vendor='{vendor}', total={total}")
                     logger.info(f"Skipping low-quality receipt: vendor='{vendor}', total={total}, valid_items={len(valid_line_items)}")
+                    continue
+                
+                # ベンダー名が"Unknown"で金額も0の場合もスキップ
+                if vendor == 'Unknown' and total <= 0:
+                    logger.error(f"Unknown vendor with zero amount, skipping")
                     continue
                 
                 # Debug: Log the raw receipt data
@@ -679,6 +691,12 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
                     logger.warning(f"Composite document type detected at Receipt creation: '{receipt_data.get('document_type')}' -> '{doc_type}'")
                 else:
                     doc_type = receipt_data.get('document_type')
+                
+                # 最終チェック：ベンダー名が数字のみの場合はUnknownに変更
+                if vendor and vendor.replace(' ', '').replace('/', '').replace('-', '').isdigit():
+                    logger.warning(f"Vendor name is numeric, changing to Unknown: {vendor}")
+                    receipt_data['vendor'] = 'Unknown'
+                    vendor = 'Unknown'
                 
                 # レシート固有フィンガープリント生成および保存
                 receipt_fingerprint = analyzer.generate_receipt_fingerprint(receipt_data)

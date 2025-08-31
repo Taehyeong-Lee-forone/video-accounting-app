@@ -228,6 +228,9 @@ class VisionOCRService:
             r'^\d+日$',      # 数字+「日」だけ
             r'^[\d\.]+$',    # 数字だけ
             r'^[=\-\+\*\/]+',  # 記号で始まる
+            r'^\d+\s+\d+/\d+$',  # 「1122300 3/36」のようなパターン
+            r'^\d{6,}',  # 6桁以上の数字で始まる
+            r'^\d+/\d+$',  # 分数のみ
         ]
         
         # 優先順位リスト（高い順）
@@ -280,8 +283,11 @@ class VisionOCRService:
                 # 基本的な除外キーワードチェック
                 if not any(keyword in cleaned for keyword in exclude_keywords):
                     # 数字だけの行も除外
-                    if not cleaned.replace(' ', '').replace('-', '').isdigit():
-                        candidates.append((5, cleaned))
+                    if not cleaned.replace(' ', '').replace('-', '').replace('/', '').isdigit():
+                        # 数字が70%以上を占める場合も除外
+                        digit_count = sum(c.isdigit() for c in cleaned)
+                        if len(cleaned) > 0 and digit_count / len(cleaned) < 0.7:
+                            candidates.append((5, cleaned))
         
         # 優先順位でソートして最初のものを返す
         if candidates:
@@ -300,6 +306,12 @@ class VisionOCRService:
                 # 長さチェック（2文字以上、50文字以下）
                 if len(vendor_name) < 2 or len(vendor_name) > 50:
                     logger.warning(f"Invalid vendor name length: {vendor_name}")
+                    is_invalid = True
+                
+                # 数字のみ、またはほとんど数字の場合も除外
+                clean_name = vendor_name.replace(' ', '').replace('/', '').replace('-', '')
+                if clean_name.isdigit():
+                    logger.warning(f"Vendor name is all digits: {vendor_name}")
                     is_invalid = True
                 
                 if not is_invalid:
@@ -451,6 +463,12 @@ class VisionOCRService:
                 # メモに警告を追加
                 data['memo'] = (data.get('memo', '') + ' [自動検証:店舗名不明の高額取引]').strip()
         
+        # 総額が0円または異常に小さい場合
+        if not data.get('total') or data.get('total', 0) < 1:
+            logger.error(f"Invalid total amount: {data.get('total')}, receipt data may be corrupt")
+            # 0円のレシートは保存しない
+            data['total'] = None
+        
         return data
 
     async def extract_receipt_data(self, image_path: str, ocr_text: str = None) -> Dict[str, Any]:
@@ -492,9 +510,20 @@ class VisionOCRService:
             
             payment = receipt_data.get('payment_method', '現金')
             
+            # 最終検証: vendorが数字のみの場合はUnknownに変更
+            final_vendor = receipt_data.get('vendor', 'Unknown')
+            if final_vendor and final_vendor.replace(' ', '').replace('/', '').replace('-', '').isdigit():
+                logger.warning(f"Vendor name is numeric, changing to Unknown: {final_vendor}")
+                final_vendor = 'Unknown'
+            
+            # 金額が0円の場合はエラーを返す
+            if not receipt_data.get('total') or receipt_data.get('total', 0) < 1:
+                logger.error("Total amount is zero or invalid, returning error")
+                raise Exception("Invalid receipt - zero amount")
+            
             # Geminiレスポンス形式と互換できるように変換
             return {
-                "vendor": receipt_data.get('vendor', 'Unknown'),
+                "vendor": final_vendor,
                 "document_type": doc_type,
                 "issue_date": receipt_data.get('issue_date', datetime.now()),
                 "currency": "JPY",
