@@ -44,6 +44,22 @@ async def test_upload():
         logger.error(f"テストエラー: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
 
+@router.post("/{video_id}/force-complete")
+async def force_complete_video(video_id: int, db: Session = Depends(get_db)):
+    """処理中のビデオを強制完了させる"""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(404, "動画が見つかりません")
+    
+    if video.status == "processing":
+        video.status = "done"
+        video.progress = 100
+        video.progress_message = "強制完了"
+        db.commit()
+        return {"message": f"Video {video_id} を強制完了しました", "receipts_count": len(video.receipts)}
+    else:
+        return {"message": f"Video {video_id} は既に {video.status} 状態です"}
+
 @router.get("/test-ocr")
 async def test_ocr():
     """OCR設定テスト用エンドポイント"""
@@ -1560,9 +1576,18 @@ async def process_video_ocr(video_id: int, db: Session):
                 if ocr_text and len(ocr_text) > 50:  # 最小文字数チェック
                     logger.info(f"Frame {i}: Processing OCR text (first 100 chars): {ocr_text[:100]}")
                     
-                    # Gemini APIで領収書データ抽出
-                    receipt_data = await analyzer.extract_receipt_data(frame_info['path'], ocr_text)
-                    logger.info(f"Frame {i}: Receipt data extraction result: {bool(receipt_data)}")
+                    # Gemini APIで領収書データ抽出（タイムアウト付き）
+                    import asyncio
+                    try:
+                        receipt_data = await asyncio.wait_for(
+                            analyzer.extract_receipt_data(frame_info['path'], ocr_text),
+                            timeout=10.0  # 10秒でタイムアウト
+                        )
+                        logger.info(f"Frame {i}: Receipt data extraction result: {bool(receipt_data)}")
+                    except asyncio.TimeoutError:
+                        logger.error(f"Frame {i}: Receipt extraction timeout after 10 seconds")
+                        receipt_data = None
+                        continue
                     
                     if receipt_data and receipt_data.get('vendor'):
                         # Frameオブジェクトを作成
@@ -1633,6 +1658,10 @@ async def process_video_ocr(video_id: int, db: Session):
                 
             except Exception as e:
                 logger.error(f"Frame {i} processing error: {e}", exc_info=True)
+                # エラーが発生してもビデオステータスは更新
+                video.progress = 40 + int(50 * (i + 1) / len(extracted_frames))
+                video.progress_message = f"フレーム {i+1}/{len(extracted_frames)} でエラー、次へ..."
+                db.commit()
                 continue
         
         # 完了
