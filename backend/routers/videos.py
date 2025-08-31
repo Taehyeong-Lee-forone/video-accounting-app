@@ -494,8 +494,50 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
                 selected_frames.sort(key=lambda x: x['time_ms'])
                 return selected_frames
             
-            # インテリジェントフレーム選択（序盤集中 + 均等分割）
-            frames_data = distribute_frames_intelligently(frames_data, target_max)
+            # インテリジェントフレーム選択 - 品質優先モード
+            # 1. 品質スコアで上位フレームを選択
+            frames_data.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
+            
+            # 2. 高品質フレームのみ選択（閾値: 0.3以上）
+            high_quality_frames = [f for f in frames_data if f.get('quality_score', 0) >= 0.3]
+            
+            if len(high_quality_frames) < 5:  # 最低5枚は必要
+                logger.warning(f"Only {len(high_quality_frames)} high quality frames found, using top {min(10, len(frames_data))} frames")
+                high_quality_frames = frames_data[:min(10, len(frames_data))]
+            
+            # 3. 時間的に分散させる（同じシーンの重複を避ける）
+            frames_data = []
+            used_time_ranges = []  # (start_ms, end_ms) のタプルリスト
+            
+            for frame in high_quality_frames[:target_max * 2]:  # 候補を多めに取る
+                frame_time = frame['time_ms']
+                
+                # 既存のフレームから2秒以上離れているか確認
+                is_far_enough = True
+                for start, end in used_time_ranges:
+                    if start - 2000 <= frame_time <= end + 2000:  # 2秒以内は近すぎる
+                        is_far_enough = False
+                        break
+                
+                if is_far_enough:
+                    frames_data.append(frame)
+                    used_time_ranges.append((frame_time - 500, frame_time + 500))  # ±0.5秒をマーク
+                    
+                    if len(frames_data) >= target_max:
+                        break
+            
+            # 4. 最低限必要な枚数を確保
+            if len(frames_data) < min(5, len(high_quality_frames)):
+                # 品質優先で追加
+                for frame in high_quality_frames:
+                    if frame not in frames_data:
+                        frames_data.append(frame)
+                        if len(frames_data) >= min(10, len(high_quality_frames)):
+                            break
+            
+            logger.info(f"Selected {len(frames_data)} high-quality frames from {len(high_quality_frames)} candidates")
+            for i, frame in enumerate(frames_data):
+                logger.info(f"Frame {i+1}: time={frame['time_ms']}ms, quality={frame.get('quality_score', 0):.3f}")
         
         # フレームデータをDBに保存
         frames = []
@@ -517,33 +559,54 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
             db.add(frame)
             frames.append(frame)
         
-        # スマートフレーム抽出を使用した場合、すべてのフレームが既に最適化されている
-        # 通常の抽出の場合のみ、追加のフィルタリングを行う
+        # 品質ベースのフレーム選択
         logger.info(f"Total frames available: {len(frames)}")
         
-        # すべてのフレームを品質スコアでソート
+        # 品質スコアでソート
         frames_by_quality = sorted(frames, key=lambda x: x.frame_score or 0, reverse=True)
         
-        # スマートフレーム抽出の場合はすべてを使用、そうでない場合は選択
-        if len(frames) <= 30:  # スマートフレーム抽出は通常30フレーム以下
-            selected_frames = frames  # すべてのフレームを使用
-            for frame in selected_frames:
-                frame.is_best = True
+        # 品質閾値を設定（動的調整）
+        if frames_by_quality:
+            # 上位フレームの品質スコアから閾値を決定
+            top_scores = [f.frame_score for f in frames_by_quality[:10]]
+            avg_top_score = sum(top_scores) / len(top_scores) if top_scores else 0
+            quality_threshold = max(0.25, avg_top_score * 0.6)  # 上位平均の60%または0.25の大きい方
+            logger.info(f"Quality threshold set to {quality_threshold:.3f} (top avg: {avg_top_score:.3f})")
         else:
-            # 通常の抽出の場合、間隔と品質で選択
-            selected_frames = []
-            last_time = -1500  # 1.5秒間隔
+            quality_threshold = 0.25
+        
+        # 高品質フレームのみ選択
+        selected_frames = []
+        used_time_windows = []  # 既に選択されたフレームの時間範囲
+        
+        for frame in frames_by_quality:
+            # 品質チェック
+            if frame.frame_score < quality_threshold and len(selected_frames) >= 5:
+                # 最低5枚確保したら、品質が低いフレームはスキップ
+                continue
             
-            # 間隔ベースの選択
-            for frame in sorted(frames, key=lambda x: x.time_ms):
-                if frame.time_ms - last_time >= 1500:  # 1.5秒以上離れている
-                    selected_frames.append(frame)
-                    last_time = frame.time_ms
-                    frame.is_best = True
+            # 時間的重複チェック（3秒以内に他のフレームがあればスキップ）
+            frame_time = frame.time_ms
+            is_too_close = False
             
-            # 高品質フレームも追加（上位20%）
-            high_quality_count = max(5, len(frames) // 5)  # 最低5枚、または全体の20%
-            for frame in frames_by_quality[:high_quality_count]:
+            for selected in selected_frames:
+                if abs(selected.time_ms - frame_time) < 3000:  # 3秒以内
+                    is_too_close = True
+                    break
+            
+            if not is_too_close:
+                selected_frames.append(frame)
+                frame.is_best = True
+                logger.info(f"Selected frame at {frame_time}ms with quality {frame.frame_score:.3f}")
+                
+                # 十分な数のフレームを選択したら終了
+                if len(selected_frames) >= min(15, len(frames_by_quality)):
+                    break
+        
+        # 最低限のフレーム数を確保
+        if len(selected_frames) < 3:
+            logger.warning(f"Only {len(selected_frames)} frames selected, adding top quality frames")
+            for frame in frames_by_quality[:5]:
                 if frame not in selected_frames:
                     selected_frames.append(frame)
                     frame.is_best = True

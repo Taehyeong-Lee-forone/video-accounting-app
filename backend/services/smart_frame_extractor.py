@@ -129,23 +129,25 @@ class SmartFrameExtractor:
         
         details = {}
         
-        # 1. 鮮明度（Laplacian variance）
+        # 1. 鮮明度（Laplacian variance）- 更に厳格に
         laplacian = cv2.Laplacian(gray, cv2.CV_64F)
         sharpness = laplacian.var()
-        # 正規化（より寛大に - 200に下げ）
-        details['sharpness'] = min(sharpness / 200, 1.0)
+        # より厳格な正規化（500以上を高品質とする）
+        details['sharpness'] = min(sharpness / 500, 1.0)
         
-        # 2. コントラスト（標準偏差）
+        # 2. コントラスト（標準偏差）- より厳格な基準
         contrast = gray.std()
-        details['contrast'] = min(contrast / 50, 1.0)
+        # コントラストが低いフレームは除外（70以上を高品質）
+        details['contrast'] = min(contrast / 70, 1.0)
         
-        # 3. 明度（適正範囲チェック）
+        # 3. 明度（適正範囲チェック）- より狭い適正範囲
         brightness = gray.mean()
-        # 暗すぎたり明るすぎたりすると減点
-        if 50 < brightness < 200:
-            details['brightness'] = 1.0
+        # レシートは通常明るいので、適正範囲を調整
+        if 80 < brightness < 220:
+            # 最適範囲は150前後
+            details['brightness'] = max(0, 1.0 - abs(brightness - 150) / 100)
         else:
-            details['brightness'] = max(0, 1.0 - abs(brightness - 125) / 125)
+            details['brightness'] = 0.2  # 範囲外は低スコア
         
         # 4. テキスト密度推定（エッジベース）
         edges = cv2.Canny(gray, 50, 150)
@@ -174,9 +176,10 @@ class SmartFrameExtractor:
             if metric in details:
                 score += details[metric] * weight
         
-        # レシートが検出されたらボーナススコア
-        if has_receipt:
-            score = min(score * 1.3, 1.0)  # レシート検出時ボーナス
+        # 品質スコアを厳格に評価（ボーナスなし）
+        # 最低限の品質基準を満たさないフレームは除外
+        if score < 0.3:
+            score = score * 0.5  # 低品質フレームはさらに減点
         
         details['final_score'] = score
         
@@ -184,12 +187,17 @@ class SmartFrameExtractor:
     
     def _detect_receipt_features(self, gray: np.ndarray, edges: np.ndarray) -> bool:
         """
-        レシート特徴検出 - 極度に簡素化
-        実際はGeminiがレシートを判断するのでここでは基本品質のみチェック
+        レシート特徴検出 - 基本的なテキスト存在チェック
         """
-        # すべてのフレームを潜在的レシートとして扱う
-        # 実際のレシート判断はGemini APIが実行
-        return True  # すべてのフレームを候補として使用
+        # エッジ密度で簡単なテキスト存在判定
+        edge_ratio = np.sum(edges > 0) / edges.size
+        
+        # エッジが少なすぎる場合はテキストなしと判定
+        if edge_ratio < 0.01:  # 1%未満はテキストなし
+            return False
+        
+        # 基本的にはテキストがありそうならTrue
+        return edge_ratio > 0.02  # 2%以上のエッジがあればOK
     
     def _select_optimal_frames(self, candidates: List[Dict]) -> List[Dict]:
         """
