@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from database import engine, Base
 from routers import videos, journals, masters, auth, export
+from routers import auth_v2  # 新しい認証ルーター追加
 import logging
 
 load_dotenv()
@@ -71,6 +72,7 @@ app.mount("/uploads", StaticFiles(directory=static_dir), name="uploads")
 
 # ルーター登録
 app.include_router(auth.router, prefix="/auth", tags=["認証"])
+app.include_router(auth_v2.router, prefix="/api/auth", tags=["認証v2"])  # 新しい認証エンドポイント
 app.include_router(videos.router, prefix="/videos", tags=["動画"])
 app.include_router(journals.router, prefix="/journals", tags=["仕訳"])
 app.include_router(masters.router, prefix="/masters", tags=["マスタ"])

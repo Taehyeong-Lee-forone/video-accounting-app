@@ -70,7 +70,7 @@ async def login(
     db: Session = Depends(get_db)
 ):
     """ログイン（JWT発行）"""
-    # ユーザー認証
+    # ユーザー認証（ユーザー名またはメールアドレス）
     user = await authenticate_user(db, form_data.username, form_data.password)
     
     if not user:

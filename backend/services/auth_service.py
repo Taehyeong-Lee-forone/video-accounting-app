@@ -12,7 +12,7 @@ import os
 import secrets
 
 from database import get_db
-from models_user import User, UserSession
+from models import User, UserSession
 
 # セキュリティ設定
 SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_urlsafe(32))
@@ -86,13 +86,16 @@ async def get_current_user(
 
 async def authenticate_user(
     db: Session,
-    email: str,
+    username_or_email: str,
     password: str
 ) -> Optional[User]:
     """
-    ユーザー認証
+    ユーザー認証（ユーザー名またはメールアドレスで認証）
     """
-    user = db.query(User).filter(User.email == email).first()
+    # ユーザー名またはメールアドレスで検索
+    user = db.query(User).filter(
+        (User.username == username_or_email) | (User.email == username_or_email)
+    ).first()
     if not user:
         return None
     if not verify_password(password, user.hashed_password):

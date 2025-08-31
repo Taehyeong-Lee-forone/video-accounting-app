@@ -64,6 +64,26 @@ class User(Base):
         """ストレージ容量チェック"""
         return (self.storage_used_mb + file_size_mb) <= self.storage_quota_mb
 
+class UserSession(Base):
+    """ユーザーセッションテーブル"""
+    __tablename__ = "user_sessions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    session_token = Column(String(255), unique=True, index=True, nullable=False)
+    
+    # セッション情報
+    ip_address = Column(String(45))  # IPv6対応
+    user_agent = Column(String(500))
+    
+    # タイムスタンプ
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_activity = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    
+    # リレーション
+    user = relationship("User", backref="sessions")
+
 class Video(Base):
     __tablename__ = "videos"
     
