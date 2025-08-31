@@ -1557,10 +1557,11 @@ async def delete_video(
 def process_video_ocr_wrapper(video_id: int):
     """バックグラウンドタスク用のラッパー関数"""
     import asyncio
-    from database import SessionLocal
     
-    # 新しいデータベースセッションを作成
-    db = SessionLocal()
+    # get_dbを使用してセッションを作成
+    db_gen = get_db()
+    db = next(db_gen)
+    
     try:
         # 非同期関数を同期的に実行
         loop = asyncio.new_event_loop()
@@ -1573,11 +1574,15 @@ def process_video_ocr_wrapper(video_id: int):
             video = db.query(Video).filter(Video.id == video_id).first()
             if video:
                 video.status = "error"
-                video.error_message = str(e)
+                video.error_message = str(e)[:500]
                 db.commit()
         except:
-            pass
+            db.rollback()
     finally:
+        try:
+            next(db_gen, None)  # ジェネレータを終了
+        except:
+            pass
         db.close()
 
 async def process_video_ocr(video_id: int, db: Session):
