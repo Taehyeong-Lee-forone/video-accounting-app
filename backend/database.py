@@ -17,10 +17,13 @@ logger.info(f"DATABASE_URL設定: {'設定済み' if os.getenv('DATABASE_URL') e
 # DATABASE_URLを取得（Render環境では必須）
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# 一時的にSQLiteを強制使用（PostgreSQL接続問題が解決するまで）
-if os.getenv("USE_SQLITE", "false").lower() == "true":
-    logger.info("USE_SQLITE=true - SQLiteを使用")
-    DATABASE_URL = "sqlite:///./video_accounting.db"
+# Render環境では必ずPostgreSQLを使用
+if os.getenv("RENDER") == "true":
+    # Render環境ではUSE_SQLITEを無視
+    if not DATABASE_URL:
+        logger.error("❌ Render環境でDATABASE_URLが設定されていません")
+        raise ValueError("DATABASE_URL is required in Render environment")
+    logger.info("Render環境 - PostgreSQL (Supabase)を使用")
 elif not DATABASE_URL:
     # ローカル開発環境用のフォールバック
     logger.warning("DATABASE_URL未設定 - SQLiteを使用")
