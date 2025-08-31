@@ -84,7 +84,7 @@ async def get_current_user(
     
     return user
 
-async def authenticate_user(
+def authenticate_user(
     db: Session,
     username_or_email: str,
     password: str

@@ -71,7 +71,7 @@ async def login(
 ):
     """ログイン（JWT発行）"""
     # ユーザー認証（ユーザー名またはメールアドレス）
-    user = await authenticate_user(db, form_data.username, form_data.password)
+    user = authenticate_user(db, form_data.username, form_data.password)
     
     if not user:
         raise HTTPException(
