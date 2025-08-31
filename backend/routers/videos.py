@@ -178,10 +178,19 @@ async def upload_video(
             thumbnail_path = None
         
         # DB登録 - 元のファイル名を保持
+        # Render環境では/tmpに保存するが、パスはuploadsとして記録
+        if os.getenv("RENDER") == "true":
+            # /tmp/videos/xxx.mp4 -> uploads/videos/xxx.mp4
+            db_video_path = str(file_path).replace("/tmp/", "uploads/")
+            db_thumbnail_path = str(thumbnail_path).replace("/tmp/", "uploads/") if thumbnail_path else None
+        else:
+            db_video_path = str(file_path)
+            db_thumbnail_path = str(thumbnail_path) if thumbnail_path else None
+            
         video = Video(
             filename=file.filename,  # 元のファイル名を保持
-            local_path=str(file_path),  # 実際の保存パス
-            thumbnail_path=str(thumbnail_path) if thumbnail_path else None,
+            local_path=db_video_path,  # DBには統一されたパスを保存
+            thumbnail_path=db_thumbnail_path,
             status="processing",  # 自動的に処理開始
             progress=10  # 初期進捗を10に設定
         )
@@ -784,10 +793,15 @@ async def get_frame(video_id: int, ms: int, db: Session = Depends(get_db)):
     if not frame or not frame.frame_path:
         raise HTTPException(404, "フレームが見つかりません")
     
-    if not os.path.exists(frame.frame_path):
+    # Render環境での実際のファイルパス取得
+    actual_frame_path = frame.frame_path
+    if os.getenv("RENDER") == "true" and actual_frame_path.startswith("uploads/"):
+        actual_frame_path = actual_frame_path.replace("uploads/", "/tmp/")
+    
+    if not os.path.exists(actual_frame_path):
         raise HTTPException(404, "フレーム画像ファイルが見つかりません")
     
-    return FileResponse(frame.frame_path, media_type="image/jpeg")
+    return FileResponse(actual_frame_path, media_type="image/jpeg")
 
 @router.get("/", response_model=List[VideoResponse])
 async def list_videos(
@@ -843,7 +857,11 @@ async def get_frame_at_time(
     if not video:
         raise HTTPException(404, "動画が見つかりません")
     
+    # Render環境での実際のファイルパス取得
     video_path = video.local_path
+    if os.getenv("RENDER") == "true" and video_path.startswith("uploads/"):
+        video_path = video_path.replace("uploads/", "/tmp/")
+    
     if not os.path.exists(video_path):
         raise HTTPException(404, "動画ファイルが見つかりません")
     
@@ -898,18 +916,31 @@ async def get_video_thumbnail(video_id: int, db: Session = Depends(get_db)):
     if not video:
         raise HTTPException(404, "動画が見つかりません")
     
+    # Render環境での実際のファイルパス取得
+    actual_thumbnail_path = video.thumbnail_path
+    if os.getenv("RENDER") == "true" and actual_thumbnail_path and actual_thumbnail_path.startswith("uploads/"):
+        actual_thumbnail_path = actual_thumbnail_path.replace("uploads/", "/tmp/")
+    
+    actual_video_path = video.local_path
+    if os.getenv("RENDER") == "true" and actual_video_path.startswith("uploads/"):
+        actual_video_path = actual_video_path.replace("uploads/", "/tmp/")
+    
     # サムネイルがなければ生成を試みる
-    if not video.thumbnail_path or not os.path.exists(video.thumbnail_path):
+    if not actual_thumbnail_path or not os.path.exists(actual_thumbnail_path):
         # 動的にサムネイル生成
-        if video.local_path and os.path.exists(video.local_path):
+        if actual_video_path and os.path.exists(actual_video_path):
             try:
                 import cv2
-                thumbnail_dir = Path("uploads/thumbnails")
+                # Render環境では/tmpを使用
+                if os.getenv("RENDER") == "true":
+                    thumbnail_dir = Path("/tmp/thumbnails")
+                else:
+                    thumbnail_dir = Path("uploads/thumbnails")
                 thumbnail_dir.mkdir(parents=True, exist_ok=True)
-                thumbnail_filename = f"{Path(video.local_path).stem}_thumb.jpg"
+                thumbnail_filename = f"{Path(actual_video_path).stem}_thumb.jpg"
                 thumbnail_path = thumbnail_dir / thumbnail_filename
                 
-                cap = cv2.VideoCapture(video.local_path)
+                cap = cv2.VideoCapture(actual_video_path)
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 10)
                 ret, frame = cap.read()
                 if not ret:
@@ -923,8 +954,12 @@ async def get_video_thumbnail(video_id: int, db: Session = Depends(get_db)):
                     resized = cv2.resize(frame, (new_width, new_height))
                     cv2.imwrite(str(thumbnail_path), resized)
                     
-                    # DBアップデート
-                    video.thumbnail_path = str(thumbnail_path)
+                    # DBアップデート - Render環境では uploads パスとして保存
+                    if os.getenv("RENDER") == "true":
+                        db_thumbnail_path = str(thumbnail_path).replace("/tmp/", "uploads/")
+                    else:
+                        db_thumbnail_path = str(thumbnail_path)
+                    video.thumbnail_path = db_thumbnail_path
                     db.commit()
                     
                 cap.release()
@@ -935,7 +970,7 @@ async def get_video_thumbnail(video_id: int, db: Session = Depends(get_db)):
         # デフォルト画像を返すか404
         raise HTTPException(404, "サムネイルが見つかりません")
     
-    return FileResponse(video.thumbnail_path, media_type="image/jpeg")
+    return FileResponse(actual_thumbnail_path, media_type="image/jpeg")
 
 @router.post("/{video_id}/analyze-frame-preview")
 async def analyze_frame_preview(
@@ -1591,10 +1626,15 @@ async def process_video_ocr(video_id: int, db: Session):
                     
                     if receipt_data and receipt_data.get('vendor'):
                         # Frameオブジェクトを作成
+                        # Render環境での経路調整
+                        db_frame_path = frame_info['path']
+                        if os.getenv("RENDER") == "true":
+                            db_frame_path = db_frame_path.replace("/tmp/", "uploads/")
+                        
                         frame_obj = Frame(
                             video_id=video_id,
                             time_ms=frame_info['time_ms'],
-                            frame_path=frame_info['path'],
+                            frame_path=db_frame_path,
                             ocr_text=ocr_text,
                             is_best=True
                         )

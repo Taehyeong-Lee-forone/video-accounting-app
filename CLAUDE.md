@@ -29,3 +29,21 @@ def initialize_database():
   3. 업로드 성공/실패 여부 확인
   4. 문제 발견 시 즉시 수정
 - **테스트 완료 후에만 사용자에게 보고**
+
+## 개발 워크플로우 자동화 규칙
+- **모든 코드 변경 시 필수 수행 작업**:
+  1. **커밋**: 변경사항을 명확한 메시지와 함께 Git 커밋
+  2. **배포**: GitHub에 푸시하여 자동 배포 (Vercel/Render)
+  3. **테스트**: 배포 서버에서 실제 동작 테스트
+  4. **검증**: 에러 발생 시 즉시 수정 후 재배포
+
+- **배포 URL**:
+  - Frontend (Vercel): `https://video-accounting-app.vercel.app`
+  - Backend (Render): `https://video-accounting-app.onrender.com`
+
+- **테스트 체크리스트**:
+  - [ ] 파일 업로드 동작 확인
+  - [ ] 동영상 재생 확인
+  - [ ] 영수증 추출 및 표시 확인
+  - [ ] 仕訳 생성 확인
+  - [ ] 에러 메시지 없음 확인
