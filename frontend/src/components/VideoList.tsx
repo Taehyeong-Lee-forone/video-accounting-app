@@ -91,6 +91,20 @@ export default function VideoList() {
     }
   }
 
+  const handleForceComplete = async (videoId: number) => {
+    if (!confirm('この動画の処理を強制的に完了しますか？')) {
+      return
+    }
+    
+    try {
+      await api.post(`/videos/${videoId}/force-complete`)
+      toast.success('動画を強制完了しました')
+      refetch()
+    } catch (error) {
+      toast.error('強制完了に失敗しました')
+    }
+  }
+
   if (!videos || videos.length === 0) {
     return (
       <div className="card text-center py-12">
@@ -220,6 +234,16 @@ export default function VideoList() {
                     >
                       仕訳確認
                     </Link>
+                  )}
+                  {/* 処理中の動画に強制完了ボタンを表示 */}
+                  {(video.status === 'processing' || video.status === 'PROCESSING') && (
+                    <button
+                      onClick={() => handleForceComplete(video.id)}
+                      className="flex-1 btn-secondary text-yellow-600 hover:bg-yellow-50 text-sm py-2"
+                      title="強制完了"
+                    >
+                      強制完了
+                    </button>
                   )}
                   <button
                     onClick={() => handleDelete(video.id)}
