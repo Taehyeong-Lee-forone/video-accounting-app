@@ -101,26 +101,54 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     if (receipt.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== null) {
       const seconds = receipt.best_frame.time_ms / 1000
       
-      if (videoRef.current) {
-        // 再生停止
-        videoRef.current.pause()
-        setPlaying(false)
+      const performSeek = () => {
+        if (!videoRef.current) {
+          toast.error('ビデオプレーヤーが準備できていません')
+          return
+        }
         
-        // 少し遅延後にシーク（Reactステート更新待機）
-        setTimeout(() => {
-          if (videoRef.current) {
+        const video = videoRef.current
+        
+        // メタデータがロードされているかチェック
+        if (video.readyState >= 1 && !isNaN(video.duration)) {
+          // 再生停止してシーク
+          video.pause()
+          setPlaying(false)
+          
+          try {
+            video.currentTime = seconds
+          } catch (e) {
+            toast.error('シーク中にエラーが発生しました')
+          }
+        } else {
+          // メタデータがまだロードされていない場合は待機
+          const handleCanPlay = () => {
+            video.removeEventListener('canplay', handleCanPlay)
+            video.pause()
+            setPlaying(false)
+            
             try {
-              videoRef.current.currentTime = seconds
+              video.currentTime = seconds
             } catch (e) {
               toast.error('シーク中にエラーが発生しました')
             }
           }
-        }, 100)
-      } else {
-        toast.error('ビデオプレーヤーが準備できていません')
+          
+          video.addEventListener('canplay', handleCanPlay)
+          
+          // タイムアウト設定（3秒）
+          setTimeout(() => {
+            video.removeEventListener('canplay', handleCanPlay)
+            if (video.readyState < 1) {
+              toast.error('ビデオの読み込みに失敗しました')
+            }
+          }, 3000)
+        }
       }
+      
+      // 即座に実行を試みる
+      performSeek()
     } else {
-      console.log('No valid time_ms in best_frame, receipt:', receipt)
       // time_msがない場合も選択状態にはする
       toast('この領収書にはタイムスタンプがありません')
     }
@@ -510,6 +538,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
               
               <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
                 <CustomVideoPlayer
+                  key={`video-${videoId}-${video.updated_at}`}
                   url={video.local_path ? `${API_URL}/${video.local_path}` : ''}
                   receipts={video.receipts || []}
                   onReceiptClick={handleReceiptClick}
