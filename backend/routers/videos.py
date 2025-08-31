@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
-from typing import List
+from typing import List, Optional, Dict, Any
 import os
 import shutil
 from pathlib import Path
@@ -1590,6 +1590,90 @@ async def delete_video(
         logger.error(f"Unexpected error deleting video {video_id}: {e}", exc_info=True)
         raise HTTPException(500, f"予期しないエラーが発生しました: {str(e)}")
 
+def extract_receipt_info_from_text(ocr_text: str) -> Optional[Dict[str, Any]]:
+    """
+    OCRテキストから領収書情報を抽出（簡易版）
+    """
+    import re
+    from datetime import datetime
+    
+    if not ocr_text:
+        return None
+    
+    receipt_info = {}
+    
+    # 店舗名を検出（最初の行や「様」「御中」の前など）
+    lines = ocr_text.split('\n')
+    for line in lines[:5]:  # 最初の5行をチェック
+        line = line.strip()
+        if line and len(line) > 2 and not re.match(r'^[\d\s\-\/]+$', line):
+            # 数字だけの行でなければ店舗名候補
+            receipt_info['vendor'] = line[:50]  # 最大50文字
+            break
+    
+    # 合計金額を検出
+    total_patterns = [
+        r'合計[:\s]*[¥￥]?[\s]*([\d,]+)',
+        r'合\s*計[:\s]*[¥￥]?[\s]*([\d,]+)',
+        r'総額[:\s]*[¥￥]?[\s]*([\d,]+)',
+        r'[¥￥]\s*([\d,]+)\s*円?',
+        r'([\d,]+)\s*円'
+    ]
+    
+    for pattern in total_patterns:
+        match = re.search(pattern, ocr_text, re.IGNORECASE)
+        if match:
+            try:
+                amount_str = match.group(1).replace(',', '')
+                amount = float(amount_str)
+                if amount > 0 and amount < 10000000:  # 妥当な金額範囲
+                    receipt_info['total'] = amount
+                    break
+            except:
+                continue
+    
+    # 日付を検出
+    date_patterns = [
+        r'(\d{4})[年\-\/](\d{1,2})[月\-\/](\d{1,2})',
+        r'(\d{2})[年\-\/](\d{1,2})[月\-\/](\d{1,2})',
+        r'(\d{1,2})[月\/](\d{1,2})[日\/]'
+    ]
+    
+    for pattern in date_patterns:
+        match = re.search(pattern, ocr_text)
+        if match:
+            try:
+                if len(match.groups()) == 3:
+                    year = int(match.group(1))
+                    if year < 100:
+                        year += 2000
+                    month = int(match.group(2))
+                    day = int(match.group(3))
+                    receipt_info['date'] = f"{year:04d}-{month:02d}-{day:02d}"
+                elif len(match.groups()) == 2:
+                    # 年がない場合は現在年を使用
+                    year = datetime.now().year
+                    month = int(match.group(1))
+                    day = int(match.group(2))
+                    receipt_info['date'] = f"{year:04d}-{month:02d}-{day:02d}"
+                break
+            except:
+                continue
+    
+    # 最低限の情報があれば返す
+    if receipt_info.get('vendor') or receipt_info.get('total'):
+        # デフォルト値を設定
+        if not receipt_info.get('vendor'):
+            receipt_info['vendor'] = 'レシート'
+        if not receipt_info.get('total'):
+            receipt_info['total'] = 0
+        if not receipt_info.get('date'):
+            receipt_info['date'] = None
+            
+        return receipt_info
+    
+    return None
+
 def process_video_ocr_wrapper(video_id: int):
     """バックグラウンドタスク用のラッパー関数（超簡易版）"""
     logger.info(f"バックグラウンドタスク開始: Video ID {video_id}")
@@ -1599,11 +1683,11 @@ def process_video_ocr_wrapper(video_id: int):
     db = next(db_gen)
     
     try:
-        # Render環境では簡易処理を使用
+        # Render環境でも実際のOCR処理を実行（軽量版）
         if os.getenv("RENDER") == "true":
-            logger.info("Render環境検出 - 簡易処理モード")
-            from routers.videos_simple import process_video_simple
-            process_video_simple(video_id, db)
+            logger.info("Render環境検出 - 軽量OCR処理モード")
+            # 軽量版OCR処理を実行
+            process_video_ocr_sync(video_id, db)
         else:
             # ローカルでは通常処理
             process_video_ocr_sync(video_id, db)
@@ -1755,16 +1839,23 @@ def process_video_ocr_sync(video_id: int, db: Session):
                 if ocr_text and len(ocr_text) > 50:  # 最小文字数チェック
                     logger.info(f"Frame {i}: Processing OCR text (first 100 chars): {ocr_text[:100]}")
                     
-                    # 領収書データ抽出をスキップ（簡易版）
-                    # Render環境では単純なテキスト検出のみ
+                    # OCRテキストから領収書データを抽出
                     receipt_data = None
-                    if "レシート" in ocr_text or "領収書" in ocr_text or "合計" in ocr_text:
-                        logger.info(f"Frame {i}: Receipt keywords found, marking as potential receipt")
-                        receipt_data = {
-                            'vendor': 'OCR検出店舗',
-                            'total': 1000,
-                            'date': None
-                        }
+                    try:
+                        # 簡易的なレシート解析
+                        receipt_data = extract_receipt_info_from_text(ocr_text)
+                        if receipt_data:
+                            logger.info(f"Frame {i}: Receipt data extracted: vendor={receipt_data.get('vendor')}, total={receipt_data.get('total')}")
+                    except Exception as e:
+                        logger.warning(f"Frame {i}: Receipt extraction failed: {e}")
+                        # フォールバック：キーワード検出
+                        if "レシート" in ocr_text or "領収書" in ocr_text or "合計" in ocr_text or "¥" in ocr_text:
+                            logger.info(f"Frame {i}: Receipt keywords found, using fallback")
+                            receipt_data = {
+                                'vendor': '店舗名未検出',
+                                'total': 0,
+                                'date': None
+                            }
                     
                     if receipt_data and receipt_data.get('vendor'):
                         # Frameオブジェクトを作成

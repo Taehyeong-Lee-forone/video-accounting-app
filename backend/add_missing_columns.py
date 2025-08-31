@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 """
-videos テーブルに不足しているカラムを追加
+journal_entriesテーブルに不足しているカラムを追加
 """
-import os
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-
-load_dotenv()
 
 # Supabase接続URL
 DATABASE_URL = "postgresql://postgres.dhbzrmokkyeevuphhkrd:Xogud2960!\"@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require"
 
 print("="*50)
-print("Videos テーブル カラム追加")
+print("不足カラムの追加")
 print("="*50)
 
 engine = create_engine(DATABASE_URL)
@@ -21,79 +17,67 @@ try:
     with engine.begin() as conn:
         print("\n1. データベース接続成功")
         
-        # 現在のvideosテーブル構造を確認
-        print("\n2. 現在のvideosテーブル構造確認...")
-        check_columns = """
-        SELECT column_name, data_type, is_nullable
-        FROM information_schema.columns 
-        WHERE table_name = 'videos'
-        ORDER BY ordinal_position;
-        """
-        result = conn.execute(text(check_columns))
-        existing_columns = {row[0]: row[1] for row in result}
+        # journal_entriesテーブルのカラム確認
+        print("\n2. journal_entriesテーブルのカラム確認...")
+        result = conn.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'journal_entries'
+            ORDER BY ordinal_position
+        """))
         
-        print("   既存カラム:")
-        for col, dtype in existing_columns.items():
-            print(f"   - {col}: {dtype}")
+        existing_columns = [row[0] for row in result]
+        print(f"   既存カラム: {', '.join(existing_columns)}")
         
-        # 必要なカラムのリスト
+        # 必要なカラムのリスト（models.pyから）
         required_columns = {
-            'cloud_url': 'VARCHAR(500)',
-            'local_path': 'VARCHAR(500)',
-            'thumbnail_path': 'VARCHAR(500)',
-            'file_size_mb': 'FLOAT',
-            'duration_ms': 'INTEGER',
-            'original_filename': 'VARCHAR(255)',
-            'file_size': 'BIGINT',
-            'duration': 'FLOAT',
-            'fps': 'FLOAT',
-            'width': 'INTEGER',
-            'height': 'INTEGER',
-            'processing_started_at': 'TIMESTAMP',
-            'processing_completed_at': 'TIMESTAMP'
+            'time_ms': 'INTEGER',
+            'debit_account': 'VARCHAR(100)',
+            'credit_account': 'VARCHAR(100)',
+            'debit_amount': 'FLOAT',
+            'credit_amount': 'FLOAT',
+            'tax_account': 'VARCHAR(100)',
+            'tax_amount': 'FLOAT',
+            'memo': 'TEXT',
+            'status': 'VARCHAR(20)',
+            'confirmed_by': 'VARCHAR(100)',
+            'confirmed_at': 'TIMESTAMP WITH TIME ZONE',
+            'created_at': 'TIMESTAMP WITH TIME ZONE',
+            'updated_at': 'TIMESTAMP WITH TIME ZONE'
         }
         
         # 不足しているカラムを追加
         print("\n3. 不足カラムを追加中...")
-        added_columns = []
+        for column_name, data_type in required_columns.items():
+            if column_name not in existing_columns:
+                print(f"   - {column_name}を追加中...")
+                
+                # デフォルト値を設定
+                default_clause = ""
+                if column_name == 'status':
+                    default_clause = " DEFAULT 'unconfirmed'"
+                elif column_name == 'created_at' or column_name == 'updated_at':
+                    default_clause = " DEFAULT CURRENT_TIMESTAMP"
+                elif 'amount' in column_name:
+                    default_clause = " DEFAULT 0"
+                elif column_name == 'time_ms':
+                    default_clause = " DEFAULT 0"
+                
+                sql = f"ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS {column_name} {data_type}{default_clause}"
+                conn.execute(text(sql))
+                print(f"     ✅ {column_name}追加完了")
         
-        for column, dtype in required_columns.items():
-            if column not in existing_columns:
-                try:
-                    # PostgreSQL用のデータ型に変換
-                    pg_dtype = dtype.replace('VARCHAR', 'VARCHAR').replace('FLOAT', 'REAL')
-                    
-                    alter_sql = f"ALTER TABLE videos ADD COLUMN IF NOT EXISTS {column} {pg_dtype}"
-                    conn.execute(text(alter_sql))
-                    added_columns.append(column)
-                    print(f"   ✅ {column} カラム追加")
-                except Exception as e:
-                    print(f"   ⚠️ {column} カラム追加エラー: {e}")
+        # 最終確認
+        print("\n4. 最終的なjournal_entriesテーブル構造:")
+        result = conn.execute(text("""
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = 'journal_entries'
+            ORDER BY ordinal_position
+        """))
         
-        if not added_columns:
-            print("   ℹ️ 追加するカラムはありません")
-        
-        # statusカラムのデフォルト値設定
-        print("\n4. statusカラムのデフォルト値設定...")
-        try:
-            conn.execute(text("""
-                ALTER TABLE videos 
-                ALTER COLUMN status SET DEFAULT 'pending'
-            """))
-            print("   ✅ statusカラムのデフォルト値設定完了")
-        except:
-            print("   ℹ️ 既に設定済み")
-        
-        # 最終的なテーブル構造確認
-        print("\n5. 更新後のテーブル構造確認...")
-        result = conn.execute(text(check_columns))
-        final_columns = [row[0] for row in result]
-        
-        print("   最終カラムリスト:")
-        for col in final_columns:
-            print(f"   - {col}")
-        
-        print(f"\n   合計カラム数: {len(final_columns)}")
+        for row in result:
+            print(f"   - {row[0]}: {row[1]}")
     
     print("\n" + "="*50)
     print("✅ カラム追加完了!")
