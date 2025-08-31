@@ -20,11 +20,12 @@ def upload_video():
     if not test_file.exists():
         print("테스트 파일이 없습니다. 더미 파일 사용...")
         files = {'file': ('test.mp4', b'dummy video data', 'video/mp4')}
+        response = requests.post(f"{API_URL}/videos/", files=files)
     else:
+        print(f"테스트 파일 사용: {test_file}")
         with open(test_file, 'rb') as f:
             files = {'file': (test_file.name, f, 'video/mp4')}
-    
-    response = requests.post(f"{API_URL}/videos/", files=files)
+            response = requests.post(f"{API_URL}/videos/", files=files)
     
     if response.status_code == 200:
         data = response.json()

@@ -841,10 +841,16 @@ async def get_frame_image(frame_id: int, db: Session = Depends(get_db)):
     if not frame or not frame.frame_path:
         raise HTTPException(404, "フレームが見つかりません")
     
-    if not os.path.exists(frame.frame_path):
+    # Render環境での実際のファイルパス取得
+    actual_frame_path = frame.frame_path
+    if os.getenv("RENDER") == "true" and actual_frame_path.startswith("uploads/"):
+        actual_frame_path = actual_frame_path.replace("uploads/", "/tmp/")
+    
+    if not os.path.exists(actual_frame_path):
+        logger.error(f"Frame image not found: {actual_frame_path} (original: {frame.frame_path})")
         raise HTTPException(404, "画像ファイルが見つかりません")
     
-    return FileResponse(frame.frame_path, media_type="image/jpeg")
+    return FileResponse(actual_frame_path, media_type="image/jpeg")
 
 @router.get("/{video_id}/frame-at-time")
 async def get_frame_at_time(
@@ -1117,15 +1123,24 @@ async def analyze_frame_at_time(
         l = clahe.apply(l)
         frame = cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2BGR)
         
+        # Render環境でのフレーム保存パス
         frame_filename = f"manual_frame_{video_id}_{actual_time_ms}.jpg"
-        frame_path = f"uploads/frames/{frame_filename}"
-        cv2.imwrite(frame_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 100])  # 最高品質で保存
+        if os.getenv("RENDER") == "true":
+            actual_frame_path = f"/tmp/frames/{frame_filename}"
+            db_frame_path = f"uploads/frames/{frame_filename}"
+        else:
+            actual_frame_path = f"uploads/frames/{frame_filename}"
+            db_frame_path = actual_frame_path
+        
+        # ディレクトリ確認
+        os.makedirs(os.path.dirname(actual_frame_path), exist_ok=True)
+        cv2.imwrite(actual_frame_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 100])  # 最高品質で保存
         cap.release()
         
         logger.info(f"Frame capture - Requested: {time_ms}ms (frame {target_frame}), Actual: {actual_time_ms}ms (frame {actual_frame}), FPS: {fps}")
         
         # フレーム品質分析（実際の時刻を使用）
-        frame_data = analyzer._analyze_frame(frame_path, actual_time_ms)
+        frame_data = analyzer._analyze_frame(actual_frame_path, actual_time_ms)
         
         # フレームをDBに保存（実際の時刻を使用）
         frame_obj = Frame(
@@ -1136,7 +1151,7 @@ async def analyze_frame_at_time(
             contrast=frame_data['contrast'],
             phash=frame_data['phash'],
             frame_score=frame_data['frame_score'],
-            frame_path=frame_path,
+            frame_path=db_frame_path,
             is_best=True,  # 手動選択フレームは常にベスト扱い
             is_manual=True  # 手動追加フラグ
         )
@@ -1309,24 +1324,32 @@ async def update_receipt_frame(
             raise HTTPException(400, "フレームを取得できませんでした")
         
         # フレームを保存
-        output_dir = Path("uploads/frames")
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
         import time
         timestamp = int(time.time() * 1000)
         frame_filename = f"{timestamp}_frame_{actual_time_ms:08d}ms.jpg"
-        frame_path = str(output_dir / frame_filename)
-        cv2.imwrite(frame_path, frame)
+        
+        # Render環境でのパス設定
+        if os.getenv("RENDER") == "true":
+            output_dir = Path("/tmp/frames")
+            actual_frame_path = str(output_dir / frame_filename)
+            db_frame_path = f"uploads/frames/{frame_filename}"
+        else:
+            output_dir = Path("uploads/frames")
+            actual_frame_path = str(output_dir / frame_filename)
+            db_frame_path = actual_frame_path
+        
+        output_dir.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(actual_frame_path, frame)
         
         # 画像分析（品質スコア、pHash等）
         analyzer = VideoAnalyzer()
-        frame_data = analyzer._analyze_frame(frame_path, actual_time_ms)
+        frame_data = analyzer._analyze_frame(actual_frame_path, actual_time_ms)
         
         # 新しいFrameオブジェクトを作成
         new_frame = Frame(
             video_id=video_id,
             time_ms=actual_time_ms,
-            frame_path=frame_path,
+            frame_path=db_frame_path,
             sharpness=frame_data['sharpness'],
             brightness=frame_data['brightness'],
             contrast=frame_data['contrast'],
