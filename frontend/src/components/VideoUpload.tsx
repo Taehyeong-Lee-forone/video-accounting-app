@@ -47,19 +47,22 @@ export default function VideoUpload({ onUploadSuccess }: VideoUploadProps) {
       toast.success('動画をアップロードしました')
       onUploadSuccess()
       
-      // 自動で分析開始およびリアルタイム進行状況追跡開始
+      // アップロード時に自動的に分析が開始されるため、進行状況追跡のみ開始
       const videoId = response.data.id
       setAnalysisVideoId(videoId)
       
-      await api.post(`/videos/${videoId}/analyze`, {
-        frames_per_second: 2,
-      })
-      
+      // analyze APIを呼ばずに、進行状況の追跡のみ開始
       startPolling()
       toast.success('分析を開始しました - 進行状況を表示します')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error)
-      toast.error('アップロードに失敗しました')
+      // エラーの詳細をログに出力
+      if (error.response) {
+        console.error('Error response:', error.response.data)
+        toast.error(`アップロードに失敗しました: ${error.response.data?.detail || error.message}`)
+      } else {
+        toast.error('アップロードに失敗しました')
+      }
     } finally {
       setUploading(false)
       setUploadProgress(0)
