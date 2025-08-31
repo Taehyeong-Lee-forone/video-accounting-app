@@ -89,15 +89,8 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   }
 
   const handleReceiptClick = (receipt: any) => {
-    console.log('=== handleReceiptClick called ===')
-    console.log('Receipt clicked:', receipt)
-    console.log('Receipt ID:', receipt?.id)
-    console.log('best_frame:', receipt?.best_frame)
-    console.log('time_ms:', receipt?.best_frame?.time_ms)
-    
     // 領収書が有効かチェック
     if (!receipt || !receipt.id) {
-      console.error('Invalid receipt data:', receipt)
       toast.error('領収書データが無効です')
       return
     }
@@ -107,11 +100,8 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     // ビデオシーク
     if (receipt.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== null) {
       const seconds = receipt.best_frame.time_ms / 1000
-      console.log('Attempting to seek to:', seconds, 'seconds from', receipt.best_frame.time_ms, 'ms')
-      console.log('videoRef.current:', videoRef.current)
       
       if (videoRef.current) {
-        console.log('Video element found, current time before:', videoRef.current.currentTime)
         // 再生停止
         videoRef.current.pause()
         setPlaying(false)
@@ -120,31 +110,13 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
         setTimeout(() => {
           if (videoRef.current) {
             try {
-              console.log('Before seek - video properties:')
-              console.log('  duration:', videoRef.current.duration)
-              console.log('  readyState:', videoRef.current.readyState)
-              console.log('  currentTime before:', videoRef.current.currentTime)
-              console.log('Setting currentTime to:', seconds)
-              
               videoRef.current.currentTime = seconds
-              
-              // 即座に確認
-              console.log('Immediately after seek:', videoRef.current.currentTime)
-              
-              // さらに遅延後に確認
-              setTimeout(() => {
-                console.log('After 100ms delay:', videoRef.current?.currentTime)
-              }, 100)
             } catch (e) {
-              console.error('Seek error:', e)
               toast.error('シーク中にエラーが発生しました')
             }
-          } else {
-            console.log('videoRef.current is null in setTimeout')
           }
         }, 100)
       } else {
-        console.log('Video ref is null')
         toast.error('ビデオプレーヤーが準備できていません')
       }
     } else {

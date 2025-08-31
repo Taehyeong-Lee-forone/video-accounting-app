@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """領収書データの詳細確認"""
 
+import os
 import requests
 import json
 
+# APIベースURLを環境変数から取得
+API_URL = os.getenv("API_URL", "http://localhost:5001")
+
 # 最新の動画を取得
-videos = requests.get("http://localhost:5001/videos", timeout=3).json()
+videos = requests.get(f"{API_URL}/videos", timeout=3).json()
 done = [v for v in videos if v.get('status') == 'done']
 
 if done:
@@ -13,7 +17,7 @@ if done:
     print(f"動画ID: {latest['id']}")
     
     # 詳細取得
-    detail = requests.get(f"http://localhost:5001/videos/{latest['id']}", timeout=3).json()
+    detail = requests.get(f"{API_URL}/videos/{latest['id']}", timeout=3).json()
     receipts = detail.get('receipts', [])
     
     print(f"\n全領収書データ ({len(receipts)}件):")

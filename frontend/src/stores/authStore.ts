@@ -66,7 +66,6 @@ export const useAuthStore = create<AuthState>()(
           // Axiosのデフォルトヘッダーに設定
           axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
         } catch (error: any) {
-          console.error('Login failed:', error);
           throw new Error(
             error.response?.data?.detail || 'ログインに失敗しました'
           );
@@ -100,7 +99,6 @@ export const useAuthStore = create<AuthState>()(
           set({ token: access_token });
           axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
         } catch (error) {
-          console.error('Token refresh failed:', error);
           get().logout();
           throw error;
         }
@@ -127,7 +125,6 @@ export const useAuthStore = create<AuthState>()(
           
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         } catch (error) {
-          console.error('Auth check failed:', error);
           // トークンが無効な場合はリフレッシュを試みる
           try {
             await get().refreshAccessToken();

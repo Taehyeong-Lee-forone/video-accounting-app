@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """シーク機能のデバッグ情報"""
 
+import os
 import requests
 
+# APIベースURLを環境変数から取得
+API_URL = os.getenv("API_URL", "http://localhost:5001")
+
 # 最新の動画を取得
-videos = requests.get("http://localhost:5001/videos", timeout=3).json()
+videos = requests.get(f"{API_URL}/videos", timeout=3).json()
 done = [v for v in videos if v.get('status') == 'done']
 
 if done:
@@ -12,10 +16,11 @@ if done:
     print("=" * 60)
     print("📹 シーク機能デバッグガイド")
     print("=" * 60)
-    print(f"\nテスト対象: http://localhost:3000/review/{latest['id']}")
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    print(f"\nテスト対象: {FRONTEND_URL}/review/{latest['id']}")
     
     # 詳細取得
-    detail = requests.get(f"http://localhost:5001/videos/{latest['id']}", timeout=3).json()
+    detail = requests.get(f"{API_URL}/videos/{latest['id']}", timeout=3).json()
     receipts = detail.get('receipts', [])[:5]
     
     print("\n🔍 確認手順:")

@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
+import os
 import requests
 import json
 
-response = requests.get("http://localhost:8000/api/videos/19")
+# APIベースURLを環境変数から取得
+API_URL = os.getenv("API_URL", "http://localhost:8000")
+
+response = requests.get(f"{API_URL}/api/videos/19")
 data = response.json()
 
 if 'receipts' in data and len(data['receipts']) > 0:
