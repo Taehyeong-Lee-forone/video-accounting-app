@@ -144,6 +144,7 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         refreshToken: state.refreshToken,
         user: state.user,
+        isAuthenticated: state.isAuthenticated,
       }),
     }
   )
