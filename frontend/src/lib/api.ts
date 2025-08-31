@@ -16,9 +16,17 @@ export const api = axios.create({
 // Request interceptor for auth
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    // Zustand persist store에서 직접 읽기
+    const authStorage = localStorage.getItem('auth-storage')
+    if (authStorage) {
+      try {
+        const { state } = JSON.parse(authStorage)
+        if (state?.token) {
+          config.headers.Authorization = `Bearer ${state.token}`
+        }
+      } catch (e) {
+        console.error('Failed to parse auth storage:', e)
+      }
     }
     return config
   },
@@ -30,11 +38,15 @@ api.interceptors.request.use(
 // Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
       // Handle unauthorized access
-      localStorage.removeItem('access_token')
-      window.location.href = '/login'
+      localStorage.removeItem('auth-storage')
+      
+      // 로그인 페이지가 아닌 경우에만 리다이렉트
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }

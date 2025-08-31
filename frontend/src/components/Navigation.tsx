@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { HomeIcon, CogIcon, DocumentArrowDownIcon, PlayIcon } from '@heroicons/react/24/outline'
+import { HomeIcon, CogIcon, DocumentArrowDownIcon, PlayIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline'
+import { useAuthStore } from '@/stores/authStore'
 
 const navigation = [
   { name: 'ホーム', href: '/', icon: HomeIcon },
@@ -12,6 +13,12 @@ const navigation = [
 
 export default function Navigation() {
   const pathname = usePathname()
+  const { user, logout, isAuthenticated } = useAuthStore()
+  
+  const handleLogout = () => {
+    logout()
+    window.location.href = '/login'
+  }
 
   return (
     <nav className="bg-white border-b border-gray-200">
@@ -44,13 +51,29 @@ export default function Navigation() {
               })}
             </div>
           </div>
-          <div className="flex items-center">
-            <Link
-              href="/app"
-              className="ml-4 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              始める
-            </Link>
+          <div className="flex items-center space-x-4">
+            {isAuthenticated && user && (
+              <>
+                <span className="text-sm text-gray-600">
+                  {user.username}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  <ArrowRightOnRectangleIcon className="h-4 w-4 mr-1" />
+                  ログアウト
+                </button>
+              </>
+            )}
+            {!isAuthenticated && (
+              <Link
+                href="/login"
+                className="ml-4 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                ログイン
+              </Link>
+            )}
           </div>
         </div>
       </div>
