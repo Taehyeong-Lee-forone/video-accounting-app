@@ -1531,28 +1531,64 @@ async def delete_video(
     video_id: int,
     db: Session = Depends(get_db)
 ):
-    """ビデオ削除"""
-    video = db.query(Video).filter(Video.id == video_id).first()
-    if not video:
-        raise HTTPException(404, "動画が見つかりません")
-    
-    # 関連データも一緒に削除（CASCADE設定がない場合）
-    db.query(Frame).filter(Frame.video_id == video_id).delete()
-    db.query(Receipt).filter(Receipt.video_id == video_id).delete()
-    db.query(JournalEntry).filter(JournalEntry.video_id == video_id).delete()
-    
-    # ローカルファイル削除
-    if video.local_path and os.path.exists(video.local_path):
+    """ビデオ削除（改善版）"""
+    try:
+        video = db.query(Video).filter(Video.id == video_id).first()
+        if not video:
+            raise HTTPException(404, "動画が見つかりません")
+        
+        # トランザクション開始
         try:
-            os.remove(video.local_path)
-        except:
-            pass
-    
-    # ビデオレコード削除
-    db.delete(video)
-    db.commit()
-    
-    return {"message": "動画を削除しました"}
+            # 関連データを正しい順序で削除
+            # 1. JournalEntry（最も依存関係が深い）
+            journal_count = db.query(JournalEntry).filter(JournalEntry.video_id == video_id).count()
+            db.query(JournalEntry).filter(JournalEntry.video_id == video_id).delete(synchronize_session=False)
+            logger.info(f"Deleted {journal_count} journal entries for video {video_id}")
+            
+            # 2. Receipt（Frameに依存）
+            receipt_count = db.query(Receipt).filter(Receipt.video_id == video_id).count()
+            db.query(Receipt).filter(Receipt.video_id == video_id).delete(synchronize_session=False)
+            logger.info(f"Deleted {receipt_count} receipts for video {video_id}")
+            
+            # 3. Frame（Videoに依存）
+            frame_count = db.query(Frame).filter(Frame.video_id == video_id).count()
+            db.query(Frame).filter(Frame.video_id == video_id).delete(synchronize_session=False)
+            logger.info(f"Deleted {frame_count} frames for video {video_id}")
+            
+            # 4. ローカルファイル削除（エラーは無視）
+            if video.local_path:
+                try:
+                    # Render環境のパス変換
+                    actual_path = video.local_path
+                    if os.getenv("RENDER") == "true" and actual_path.startswith("uploads/"):
+                        actual_path = actual_path.replace("uploads/", "/tmp/")
+                    
+                    if os.path.exists(actual_path):
+                        os.remove(actual_path)
+                        logger.info(f"Deleted file: {actual_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete file {video.local_path}: {e}")
+                    # ファイル削除失敗は無視して続行
+            
+            # 5. ビデオレコード削除
+            db.delete(video)
+            
+            # コミット
+            db.commit()
+            logger.info(f"Successfully deleted video {video_id}")
+            
+            return {"message": "動画を削除しました", "video_id": video_id}
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error deleting video {video_id}: {e}", exc_info=True)
+            raise HTTPException(500, f"削除中にエラーが発生しました: {str(e)}")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error deleting video {video_id}: {e}", exc_info=True)
+        raise HTTPException(500, f"予期しないエラーが発生しました: {str(e)}")
 
 def process_video_ocr_wrapper(video_id: int):
     """バックグラウンドタスク用のラッパー関数（超簡易版）"""
