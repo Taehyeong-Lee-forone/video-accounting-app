@@ -1545,10 +1545,14 @@ async def process_video_ocr(video_id: int, db: Session):
         video.progress_message = "フレーム抽出中..."
         db.commit()
         
-        # 必要なディレクトリを作成（絶対パスを使用）
+        # 必要なディレクトリを作成（Render環境を考慮）
         import os
-        base_path = Path(os.path.dirname(os.path.abspath(__file__))).parent  # backend/
-        frames_dir = base_path / "uploads" / "frames"
+        if os.getenv("RENDER") == "true":
+            # Render環境では/tmpを使用
+            frames_dir = Path("/tmp/frames")
+        else:
+            base_path = Path(os.path.dirname(os.path.abspath(__file__))).parent  # backend/
+            frames_dir = base_path / "uploads" / "frames"
         frames_dir.mkdir(parents=True, exist_ok=True)
         
         # Vision OCRサービスを使用
@@ -1559,7 +1563,21 @@ async def process_video_ocr(video_id: int, db: Session):
         analyzer = VideoAnalyzer()
         
         # 動画からフレーム抽出（2秒間隔）
-        cap = cv2.VideoCapture(video.local_path)
+        # Render環境での実際のビデオパス取得
+        actual_video_path = video.local_path
+        if os.getenv("RENDER") == "true" and actual_video_path.startswith("uploads/"):
+            actual_video_path = actual_video_path.replace("uploads/", "/tmp/")
+        
+        # ビデオファイルの存在確認
+        if not os.path.exists(actual_video_path):
+            logger.error(f"Video file not found: {actual_video_path}")
+            video.status = "error"
+            video.error_message = f"ビデオファイルが見つかりません: {actual_video_path}"
+            db.commit()
+            return
+        
+        logger.info(f"Processing video at: {actual_video_path}")
+        cap = cv2.VideoCapture(actual_video_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         duration_sec = total_frames / fps if fps > 0 else 0
@@ -1602,7 +1620,13 @@ async def process_video_ocr(video_id: int, db: Session):
                 video.progress_message = f"フレーム {i+1}/{len(extracted_frames)} 分析中..."
                 db.commit()
                 
+                # フレームファイルの存在確認
+                if not os.path.exists(frame_info['path']):
+                    logger.error(f"Frame file not found: {frame_info['path']}")
+                    continue
+                
                 # Vision APIでOCR実行
+                logger.info(f"OCR processing frame: {frame_info['path']}")
                 ocr_result = ocr_service.extract_text_from_image(frame_info['path'])
                 ocr_text = ocr_result.get('full_text', '') if ocr_result else ''
                 
