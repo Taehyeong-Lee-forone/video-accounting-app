@@ -23,11 +23,15 @@ def test_login():
     for user in test_users:
         print(f"\nテスト: {user['email']}")
         
-        # ログイン試行
+        # ログイン試行 - FormDataとして送信
         try:
+            form_data = {
+                "username": user['email'],  # ユーザー名またはメール
+                "password": user['password']
+            }
             response = requests.post(
                 f"{BASE_URL}/auth/login",
-                json=user
+                data=form_data
             )
             
             print(f"Status Code: {response.status_code}")
@@ -55,7 +59,7 @@ def test_login():
         try:
             # FormDataとして送信
             response = requests.post(
-                f"{BASE_URL}/auth_v2/login",
+                f"{BASE_URL}/api/auth/login",
                 data={
                     "username": user['email'],
                     "password": user['password']

@@ -185,35 +185,41 @@ class ImagePreprocessor:
     
     def _enhance_for_ocr(self, image: np.ndarray) -> np.ndarray:
         """
-        # 最小限の処理のみ実行（原画像の品質を維持）
-        Minimal enhancement to preserve original image quality.
+        # OCR精度向上のための画像処理
+        Enhanced image processing for better OCR accuracy.
         """
-        # カラー画像として処理を続ける
-        if len(image.shape) == 2:
-            # もし既にグレースケールならBGRに変換
-            enhanced = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        # グレースケールに変換
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         else:
-            enhanced = image.copy()
+            gray = image.copy()
         
-        # 画像の明るさを確認
-        gray_for_analysis = cv2.cvtColor(enhanced, cv2.COLOR_BGR2GRAY)
-        mean_brightness = np.mean(gray_for_analysis)
+        # 1. デノイジング（ノイズ除去）
+        denoised = cv2.bilateralFilter(gray, 9, 75, 75)
         
-        # 非常に暗い画像の場合のみ軽い補正
-        if mean_brightness < 50:  # 非常に暗い画像のみ
-            # とても控えめなガンマ補正
-            gamma = 1.2
-            inv_gamma = 1.0 / gamma
-            table = np.array([((i / 255.0) ** inv_gamma) * 255 
-                             for i in np.arange(0, 256)]).astype("uint8")
-            enhanced = cv2.LUT(enhanced, table)
-        elif mean_brightness > 200:  # 非常に明るい画像
-            # 明るすぎる場合は少し暗くする
-            enhanced = cv2.convertScaleAbs(enhanced, alpha=0.9, beta=0)
+        # 2. コントラスト調整 (CLAHE)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+        enhanced = clahe.apply(denoised)
         
-        # CLAHEやその他の処理はスキップ（原画像の品質を保持）
+        # 3. シャープニング
+        kernel = np.array([[-1,-1,-1],
+                           [-1, 9,-1],
+                           [-1,-1,-1]])
+        sharpened = cv2.filter2D(enhanced, -1, kernel)
         
-        return enhanced
+        # 4. 適応的二値化（テキスト強調）
+        binary = cv2.adaptiveThreshold(sharpened, 255,
+                                      cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                      cv2.THRESH_BINARY, 11, 2)
+        
+        # 5. モルフォロジー処理（文字の連結性向上）
+        kernel = np.ones((2,2), np.uint8)
+        morph = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+        
+        # BGRに戻す（Vision APIはカラー画像を期待）
+        result = cv2.cvtColor(morph, cv2.COLOR_GRAY2BGR)
+        
+        return result
     
     def _assess_binary_quality(self, binary: np.ndarray) -> float:
         """

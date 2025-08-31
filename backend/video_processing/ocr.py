@@ -53,10 +53,15 @@ class OCRProcessor:
             
             image = vision.Image(content=content)
             
-            # Perform OCR with language hints
+            # Perform OCR with language hints - 日本語を最優先
             response = self.client.document_text_detection(
                 image=image,
-                image_context={'language_hints': ['ja', 'en', 'ko']}
+                image_context={
+                    'language_hints': ['ja', 'en'],  # 日本語と英語のみに絞る
+                    'text_detection_params': {
+                        'enable_text_detection_confidence_score': True  # 信頼度スコア有効化
+                    }
+                }
             )
             
             if response.error.message:

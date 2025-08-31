@@ -48,8 +48,8 @@ class Config:
     warp_padding_percent: float = 0.03  # 3% padding
     clahe_clip_limit: float = 2.0
     clahe_grid_size: int = 8
-    skip_enhancement: bool = True  # Skip image enhancement to preserve original quality
-    skip_perspective_correction: bool = True  # Skip perspective correction to avoid darkening
+    skip_enhancement: bool = False  # Enable image enhancement for better OCR accuracy
+    skip_perspective_correction: bool = False  # Enable perspective correction for better document alignment
     
     # Debug/logging
     debug: bool = False
