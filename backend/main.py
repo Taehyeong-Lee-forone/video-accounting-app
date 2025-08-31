@@ -1,11 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+from sqlalchemy.orm import Session
 import os
 from dotenv import load_dotenv
 
-from database import engine, Base
+from database import engine, Base, get_db
 from routers import videos, journals, masters, auth, export
 from routers import auth_v2  # 新しい認証ルーター追加
 import logging
