@@ -115,6 +115,61 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+@app.get("/db-info")
+async def database_info(db: Session = Depends(get_db)):
+    """データベース情報を取得（デバッグ用）"""
+    import os
+    from sqlalchemy import text
+    
+    db_type = "unknown"
+    db_info = {}
+    
+    # DATABASE_URL環境変数の状態
+    database_url = os.getenv("DATABASE_URL", "")
+    if database_url:
+        if "sqlite" in database_url:
+            db_type = "SQLite"
+            db_info["path"] = database_url.split("///")[-1] if "///" in database_url else "memory"
+        elif "postgresql" in database_url or "postgres" in database_url:
+            db_type = "PostgreSQL"
+            # URLからホスト名だけ抽出（パスワードは隠す）
+            if "@" in database_url:
+                db_info["host"] = database_url.split("@")[1].split("/")[0]
+            if "supabase" in database_url:
+                db_info["provider"] = "Supabase"
+    else:
+        db_type = "SQLite (fallback)"
+        db_info["path"] = "./video_accounting.db"
+    
+    # データベースの統計情報
+    try:
+        from models import User, Video, Receipt
+        stats = {
+            "users": db.query(User).count(),
+            "videos": db.query(Video).count(),
+            "receipts": db.query(Receipt).count()
+        }
+        
+        # SQLiteの場合、ファイルサイズも確認
+        if db_type.startswith("SQLite"):
+            import os
+            db_path = db_info.get("path", "./video_accounting.db")
+            if os.path.exists(db_path):
+                db_info["size_mb"] = round(os.path.getsize(db_path) / 1024 / 1024, 2)
+                db_info["exists"] = True
+            else:
+                db_info["exists"] = False
+    except Exception as e:
+        stats = {"error": str(e)}
+    
+    return {
+        "database_type": db_type,
+        "database_info": db_info,
+        "render_env": os.getenv("RENDER") == "true",
+        "use_sqlite": os.getenv("USE_SQLITE", "false"),
+        "statistics": stats
+    }
+
 @app.options("/videos/")
 async def video_upload_options():
     """CORS preflight用"""
