@@ -1767,28 +1767,81 @@ def process_video_ocr_sync(video_id: int, db: Session):
         
         logger.info(f"Video info: {duration_sec:.1f}秒, {total_frames}フレーム, {fps:.1f}fps")
         
-        # フレーム抽出設定（全体をしっかり処理）
+        # スマートフレーム抽出（品質ベース選別）
         extracted_frames = []
-        interval_sec = 2  # 2秒間隔で密にチェック
-        max_frames = 30  # 最大30フレームまで処理
-        frame_count = 0
-        for sec in range(0, int(duration_sec) + 1, interval_sec):
-            if frame_count >= max_frames:
-                break
-            frame_number = int(sec * fps)
+        max_final_frames = 30  # 最終的に処理する最大フレーム数
+        sample_interval = 0.5  # 0.5秒ごとにサンプリング（まず多めに取得）
+        
+        # 1. 初期サンプリング：0.5秒ごとにフレーム候補を収集
+        candidate_frames = []
+        for sec_float in [i * sample_interval for i in range(int(duration_sec / sample_interval) + 1)]:
+            frame_number = int(sec_float * fps)
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
             ret, frame = cap.read()
             
-            if ret:
-                # フレーム保存（絶対パスを使用）
-                frame_filename = f"frame_{video_id}_{sec:04d}.jpg"
+            if ret and frame is not None:
+                # フレーム品質を評価
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                
+                # 1. 鮮明度（ラプラシアン分散）
+                laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+                sharpness = laplacian.var()
+                
+                # 2. 明るさ（平均輝度）
+                brightness = gray.mean()
+                
+                # 3. コントラスト（標準偏差）
+                contrast = gray.std()
+                
+                # 4. エッジ検出（テキスト存在の可能性）
+                edges = cv2.Canny(gray, 50, 150)
+                edge_density = edges.mean()
+                
+                # 総合スコア計算
+                quality_score = (
+                    sharpness * 0.4 +  # 鮮明度重視
+                    (brightness / 255.0) * 100 * 0.2 +  # 適度な明るさ
+                    contrast * 0.2 +  # コントラスト
+                    edge_density * 0.2  # エッジ（テキストの可能性）
+                )
+                
+                candidate_frames.append({
+                    'frame': frame,
+                    'time_ms': int(sec_float * 1000),
+                    'quality_score': quality_score,
+                    'sharpness': sharpness,
+                    'brightness': brightness
+                })
+        
+        # 2. 品質順でソートし、重複を避けながら選別
+        candidate_frames.sort(key=lambda x: x['quality_score'], reverse=True)
+        
+        selected_times = set()
+        min_time_diff = 1000  # 最低1秒の間隔
+        
+        for candidate in candidate_frames:
+            if len(extracted_frames) >= max_final_frames:
+                break
+                
+            # 時間的に近いフレームが既に選ばれていないかチェック
+            time_ms = candidate['time_ms']
+            too_close = any(abs(time_ms - t) < min_time_diff for t in selected_times)
+            
+            if not too_close and candidate['quality_score'] > 10:  # 最低品質基準
+                # フレーム保存
+                frame_filename = f"frame_{video_id}_{time_ms:06d}.jpg"
                 frame_path = str(frames_dir / frame_filename)
-                cv2.imwrite(frame_path, frame)
+                cv2.imwrite(frame_path, candidate['frame'])
+                
                 extracted_frames.append({
                     'path': frame_path,
-                    'time_ms': sec * 1000
+                    'time_ms': time_ms,
+                    'quality_score': candidate['quality_score']
                 })
-                frame_count += 1
+                selected_times.add(time_ms)
+        
+        # 3. 時間順にソート
+        extracted_frames.sort(key=lambda x: x['time_ms'])
         
         cap.release()
         logger.info(f"Extracted {len(extracted_frames)} frames")
