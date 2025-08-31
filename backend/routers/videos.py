@@ -1556,6 +1556,11 @@ async def process_video_ocr(video_id: int, db: Session):
     実際のOCR処理を実行
     Google Vision APIを使用して領収書を検出・認識
     """
+    import asyncio
+    import time
+    start_time = time.time()
+    max_processing_time = 120  # 最大2分（Render制限対応）
+    
     try:
         video = db.query(Video).filter(Video.id == video_id).first()
         if not video:
@@ -1609,8 +1614,12 @@ async def process_video_ocr(video_id: int, db: Session):
         
         # 2秒ごとにフレーム抽出（処理時間を考慮）
         extracted_frames = []
-        interval_sec = 2  # 2秒間隔
+        interval_sec = 3  # 3秒間隔に変更（処理時間短縮）
+        max_frames = 10  # 最大フレーム数を制限
+        frame_count = 0
         for sec in range(0, int(duration_sec) + 1, interval_sec):
+            if frame_count >= max_frames:
+                break
             frame_number = int(sec * fps)
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
             ret, frame = cap.read()
@@ -1624,6 +1633,7 @@ async def process_video_ocr(video_id: int, db: Session):
                     'path': frame_path,
                     'time_ms': sec * 1000
                 })
+                frame_count += 1
         
         cap.release()
         logger.info(f"Extracted {len(extracted_frames)} frames")
@@ -1636,6 +1646,12 @@ async def process_video_ocr(video_id: int, db: Session):
         # 各フレームをOCR処理
         receipts_found = 0
         for i, frame_info in enumerate(extracted_frames):
+            # 処理時間チェック
+            if time.time() - start_time > max_processing_time:
+                logger.warning(f"Processing time limit reached ({max_processing_time}s), stopping at frame {i}/{len(extracted_frames)}")
+                video.progress_message = f"時間制限により処理を終了: {receipts_found}件の領収書を検出"
+                break
+            
             try:
                 # 進行状況更新
                 progress = 40 + int(40 * i / len(extracted_frames))
@@ -1663,11 +1679,16 @@ async def process_video_ocr(video_id: int, db: Session):
                     try:
                         receipt_data = await asyncio.wait_for(
                             analyzer.extract_receipt_data(frame_info['path'], ocr_text),
-                            timeout=10.0  # 10秒でタイムアウト
+                            timeout=5.0  # 5秒に短縮
                         )
                         logger.info(f"Frame {i}: Receipt data extraction result: {bool(receipt_data)}")
                     except asyncio.TimeoutError:
-                        logger.error(f"Frame {i}: Receipt extraction timeout after 10 seconds")
+                        logger.error(f"Frame {i}: Receipt extraction timeout after 5 seconds")
+                        receipt_data = None
+                        # タイムアウトしても処理を続行
+                        continue
+                    except Exception as e:
+                        logger.error(f"Frame {i}: Receipt extraction error: {e}")
                         receipt_data = None
                         continue
                     
@@ -1744,11 +1765,14 @@ async def process_video_ocr(video_id: int, db: Session):
                         db.commit()
                 
             except Exception as e:
-                logger.error(f"Frame {i} processing error: {e}", exc_info=True)
-                # エラーが発生してもビデオステータスは更新
-                video.progress = 40 + int(50 * (i + 1) / len(extracted_frames))
-                video.progress_message = f"フレーム {i+1}/{len(extracted_frames)} でエラー、次へ..."
-                db.commit()
+                logger.error(f"Frame {i} processing error: {e}")
+                # エラーが発生しても処理を続行
+                try:
+                    video.progress = 40 + int(50 * (i + 1) / len(extracted_frames))
+                    video.progress_message = f"フレーム {i+1}/{len(extracted_frames)} 処理中..."
+                    db.commit()
+                except:
+                    pass  # DBエラーも無視して続行
                 continue
         
         # 完了
