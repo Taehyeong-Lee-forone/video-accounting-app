@@ -158,45 +158,26 @@ async def upload_video(
         
         logger.info(f"ビデオDB登録成功: ID={video.id}")
         
-        # デモモード: サンプルレシートを自動生成
+        # 実際のOCR処理を開始
         try:
-            from datetime import datetime
-            import random
+            # バックグラウンドで処理を開始
+            background_tasks.add_task(
+                process_video_ocr,
+                video.id,
+                db
+            )
+            logger.info(f"OCR処理開始: ID={video.id}")
             
-            # サンプルレシートデータを作成
-            sample_vendors = ["セブンイレブン", "ローソン", "ファミリーマート", "イオン", "マクドナルド"]
-            sample_items = ["コーヒー", "サンドイッチ", "おにぎり", "ペットボトル", "お弁当"]
-            
-            # 2-3個のレシートを生成
-            num_receipts = random.randint(2, 3)
-            for i in range(num_receipts):
-                receipt = Receipt(
-                    video_id=video.id,
-                    frame_id=None,  # フレームIDは後で設定
-                    vendor=random.choice(sample_vendors),
-                    total_amount=random.randint(100, 2000),
-                    tax_amount=random.randint(10, 200),
-                    receipt_date=datetime.now(),
-                    items=", ".join(random.sample(sample_items, k=random.randint(1, 3))),
-                    payment_method=random.choice(["cash", "credit", "emoney"]),
-                    confidence_score=random.uniform(0.85, 0.99),
-                    status="confirmed",
-                    detection_type="auto"
-                )
-                db.add(receipt)
-            
-            db.commit()
-            logger.info(f"デモモード: {num_receipts}個のサンプルレシート生成")
-            
-            # ステータスを完了に
-            video.status = "done"
-            video.progress = 100
+            # ステータスを処理中に更新
+            video.status = "processing"
+            video.progress = 10
             db.commit()
             
         except Exception as e:
-            logger.error(f"デモレシート生成エラー: {e}")
+            logger.error(f"OCR処理開始エラー: {e}")
             # エラーでも動画は保存されているので続行
-            video.status = "done"
+            video.status = "error"
+            video.progress_message = str(e)
             db.commit()
         
         return video
@@ -1473,3 +1454,177 @@ async def delete_video(
     db.commit()
     
     return {"message": "動画を削除しました"}
+
+async def process_video_ocr(video_id: int, db: Session):
+    """
+    実際のOCR処理を実行
+    Google Vision APIを使用して領収書を検出・認識
+    """
+    try:
+        video = db.query(Video).filter(Video.id == video_id).first()
+        if not video:
+            logger.error(f"Video {video_id} not found")
+            return
+        
+        # 進行状況更新
+        video.status = "processing"
+        video.progress = 20
+        video.progress_message = "フレーム抽出中..."
+        db.commit()
+        
+        # 必要なディレクトリを作成（絶対パスを使用）
+        import os
+        base_path = Path(os.path.dirname(os.path.abspath(__file__))).parent  # backend/
+        frames_dir = base_path / "uploads" / "frames"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Vision OCRサービスを使用
+        from services.vision_ocr import VisionOCRService
+        ocr_service = VisionOCRService()
+        
+        # VideoAnalyzerインスタンス作成（領収書データ抽出用）
+        analyzer = VideoAnalyzer()
+        
+        # 動画からフレーム抽出（2秒間隔）
+        cap = cv2.VideoCapture(video.local_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration_sec = total_frames / fps if fps > 0 else 0
+        
+        logger.info(f"Video info: {duration_sec:.1f}秒, {total_frames}フレーム, {fps:.1f}fps")
+        
+        # 2秒ごとにフレーム抽出（処理時間を考慮）
+        extracted_frames = []
+        interval_sec = 2  # 2秒間隔
+        for sec in range(0, int(duration_sec) + 1, interval_sec):
+            frame_number = int(sec * fps)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+            ret, frame = cap.read()
+            
+            if ret:
+                # フレーム保存（絶対パスを使用）
+                frame_filename = f"frame_{video_id}_{sec:04d}.jpg"
+                frame_path = str(frames_dir / frame_filename)
+                cv2.imwrite(frame_path, frame)
+                extracted_frames.append({
+                    'path': frame_path,
+                    'time_ms': sec * 1000
+                })
+        
+        cap.release()
+        logger.info(f"Extracted {len(extracted_frames)} frames")
+        
+        # 進行状況更新
+        video.progress = 40
+        video.progress_message = f"{len(extracted_frames)}枚のフレームをOCR処理中..."
+        db.commit()
+        
+        # 各フレームをOCR処理
+        receipts_found = 0
+        for i, frame_info in enumerate(extracted_frames):
+            try:
+                # 進行状況更新
+                progress = 40 + int(40 * i / len(extracted_frames))
+                video.progress = progress
+                video.progress_message = f"フレーム {i+1}/{len(extracted_frames)} 分析中..."
+                db.commit()
+                
+                # Vision APIでOCR実行
+                ocr_result = ocr_service.extract_text_from_image(frame_info['path'])
+                ocr_text = ocr_result.get('full_text', '') if ocr_result else ''
+                
+                logger.info(f"Frame {i}: OCR result - {len(ocr_text)} characters detected")
+                
+                if ocr_text and len(ocr_text) > 50:  # 最小文字数チェック
+                    logger.info(f"Frame {i}: Processing OCR text (first 100 chars): {ocr_text[:100]}")
+                    
+                    # Gemini APIで領収書データ抽出
+                    receipt_data = await analyzer.extract_receipt_data(frame_info['path'], ocr_text)
+                    logger.info(f"Frame {i}: Receipt data extraction result: {bool(receipt_data)}")
+                    
+                    if receipt_data and receipt_data.get('vendor'):
+                        # Frameオブジェクトを作成
+                        frame_obj = Frame(
+                            video_id=video_id,
+                            time_ms=frame_info['time_ms'],
+                            frame_path=frame_info['path'],
+                            ocr_text=ocr_text,
+                            is_best=True
+                        )
+                        db.add(frame_obj)
+                        db.flush()  # IDを取得
+                        
+                        # 領収書データ保存
+                        from datetime import datetime
+                        
+                        # 日付処理
+                        issue_date = receipt_data.get('issue_date')
+                        if issue_date and isinstance(issue_date, str):
+                            try:
+                                issue_date = datetime.strptime(issue_date, '%Y-%m-%d')
+                            except:
+                                issue_date = datetime.now()
+                        elif not issue_date:
+                            issue_date = datetime.now()
+                        
+                        # Receipt作成（正しいフィールド名を使用）
+                        receipt = Receipt(
+                            video_id=video_id,
+                            best_frame_id=frame_obj.id,
+                            vendor=receipt_data.get('vendor'),
+                            vendor_norm=analyzer._normalize_text(receipt_data.get('vendor', '')),
+                            document_type=receipt_data.get('document_type', 'レシート'),
+                            issue_date=issue_date,
+                            currency=receipt_data.get('currency', 'JPY'),
+                            total=receipt_data.get('total', 0),
+                            subtotal=receipt_data.get('subtotal', 0),
+                            tax=receipt_data.get('tax', 0),
+                            tax_rate=receipt_data.get('tax_rate', 0.1),
+                            payment_method=receipt_data.get('payment_method', '現金'),
+                            is_manual=False
+                        )
+                        db.add(receipt)
+                        db.commit()
+                        
+                        receipts_found += 1
+                        logger.info(f"Receipt found: {receipt.vendor} - ¥{receipt.total}")
+                        
+                        # 仕訳データ生成
+                        generator = JournalGenerator(db)
+                        journal_entries = generator.generate_journal_entries(receipt)
+                        for entry_data in journal_entries:
+                            journal_entry = JournalEntry(
+                                receipt_id=entry_data.receipt_id,
+                                video_id=entry_data.video_id,
+                                time_ms=frame_info['time_ms'],
+                                debit_account=entry_data.debit_account,
+                                credit_account=entry_data.credit_account,
+                                debit_amount=entry_data.debit_amount,
+                                credit_amount=entry_data.credit_amount,
+                                tax_account=entry_data.tax_account,
+                                tax_amount=entry_data.tax_amount,
+                                memo=entry_data.memo,
+                                status='unconfirmed'
+                            )
+                            db.add(journal_entry)
+                        db.commit()
+                
+            except Exception as e:
+                logger.error(f"Frame {i} processing error: {e}", exc_info=True)
+                continue
+        
+        # 完了
+        video.status = "done"
+        video.progress = 100
+        video.progress_message = f"処理完了: {receipts_found}件の領収書を検出"
+        db.commit()
+        
+        logger.info(f"Video {video_id} processing complete: {receipts_found} receipts found")
+        
+    except Exception as e:
+        logger.error(f"Video OCR processing error: {e}", exc_info=True)
+        video = db.query(Video).filter(Video.id == video_id).first()
+        if video:
+            video.status = "error"
+            video.progress_message = str(e)
+            db.commit()

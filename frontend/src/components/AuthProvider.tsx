@@ -11,24 +11,17 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, checkAuth, token } = useAuthStore();
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // 初期認証チェック
-    const initAuth = async () => {
-      try {
-        await checkAuth();
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    initAuth();
-  }, []);
+    // トークンがある場合のみバックグラウンドで認証チェック
+    if (token) {
+      checkAuth().catch(err => {
+        console.error('Auth check error:', err);
+      });
+    }
+  }, [token, checkAuth]);
 
   useEffect(() => {
-    // ローディング中はスキップ
-    if (isLoading) return;
-
     // 保護されたパスかチェック
     const isProtectedPath = PROTECTED_PATHS.some(path => pathname.startsWith(path));
     
@@ -36,23 +29,15 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     if (isProtectedPath && !isAuthenticated) {
       router.push('/login');
     }
-  }, [isAuthenticated, pathname, router, isLoading]);
+  }, [isAuthenticated, pathname, router]);
 
   // ログインページで認証済みの場合はアプリへ
   useEffect(() => {
-    if (pathname === '/login' && isAuthenticated && !isLoading) {
+    if (pathname === '/login' && isAuthenticated) {
       router.push('/app');
     }
-  }, [isAuthenticated, pathname, router, isLoading]);
+  }, [isAuthenticated, pathname, router]);
 
-  // ローディング中は何も表示しない
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">読み込み中...</div>
-      </div>
-    );
-  }
-
+  // ローディング状態を削除 - 常にchildrenを表示
   return <>{children}</>;
 }
