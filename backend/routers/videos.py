@@ -1683,14 +1683,9 @@ def process_video_ocr_wrapper(video_id: int):
     db = next(db_gen)
     
     try:
-        # Render環境でも実際のOCR処理を実行（軽量版）
-        if os.getenv("RENDER") == "true":
-            logger.info("Render環境検出 - 軽量OCR処理モード")
-            # 軽量版OCR処理を実行
-            process_video_ocr_sync(video_id, db)
-        else:
-            # ローカルでは通常処理
-            process_video_ocr_sync(video_id, db)
+        # すべての環境で完全なOCR処理を実行
+        logger.info("完全OCR処理モード開始")
+        process_video_ocr_sync(video_id, db)
         logger.info(f"バックグラウンドタスク完了: Video ID {video_id}")
     except Exception as e:
         logger.error(f"処理エラー: {e}", exc_info=True)
@@ -1717,7 +1712,7 @@ def process_video_ocr_sync(video_id: int, db: Session):
     """
     import time
     start_time = time.time()
-    max_processing_time = 60  # 最大1分に短縮（Render制限対応）
+    max_processing_time = 300  # 最大5分（十分な処理時間）
     
     logger.info(f"OCR処理開始: Video ID {video_id}")
     
@@ -1772,15 +1767,10 @@ def process_video_ocr_sync(video_id: int, db: Session):
         
         logger.info(f"Video info: {duration_sec:.1f}秒, {total_frames}フレーム, {fps:.1f}fps")
         
-        # フレーム抽出設定（処理時間とRender制限を考慮）
+        # フレーム抽出設定（全体をしっかり処理）
         extracted_frames = []
-        # Render環境では処理時間を大幅に短縮
-        if os.getenv("RENDER") == "true":
-            interval_sec = 10  # 10秒間隔
-            max_frames = 3  # 最大3フレームのみ
-        else:
-            interval_sec = 5  # 5秒間隔
-            max_frames = 6  # 最大6フレーム
+        interval_sec = 2  # 2秒間隔で密にチェック
+        max_frames = 30  # 最大30フレームまで処理
         frame_count = 0
         for sec in range(0, int(duration_sec) + 1, interval_sec):
             if frame_count >= max_frames:
@@ -1839,23 +1829,29 @@ def process_video_ocr_sync(video_id: int, db: Session):
                 if ocr_text and len(ocr_text) > 50:  # 最小文字数チェック
                     logger.info(f"Frame {i}: Processing OCR text (first 100 chars): {ocr_text[:100]}")
                     
-                    # OCRテキストから領収書データを抽出
+                    # AIを使用して領収書データを抽出
                     receipt_data = None
                     try:
-                        # 簡易的なレシート解析
-                        receipt_data = extract_receipt_info_from_text(ocr_text)
+                        # Gemini APIで領収書データ抽出（同期版）
+                        import asyncio
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        receipt_data = loop.run_until_complete(
+                            analyzer.extract_receipt_data(frame_info['path'], ocr_text)
+                        )
+                        loop.close()
+                        
                         if receipt_data:
-                            logger.info(f"Frame {i}: Receipt data extracted: vendor={receipt_data.get('vendor')}, total={receipt_data.get('total')}")
+                            logger.info(f"Frame {i}: AI解析成功: vendor={receipt_data.get('vendor')}, total={receipt_data.get('total')}")
                     except Exception as e:
-                        logger.warning(f"Frame {i}: Receipt extraction failed: {e}")
-                        # フォールバック：キーワード検出
-                        if "レシート" in ocr_text or "領収書" in ocr_text or "合計" in ocr_text or "¥" in ocr_text:
-                            logger.info(f"Frame {i}: Receipt keywords found, using fallback")
-                            receipt_data = {
-                                'vendor': '店舗名未検出',
-                                'total': 0,
-                                'date': None
-                            }
+                        logger.warning(f"Frame {i}: AI解析失敗: {e}")
+                        # フォールバック：パターンマッチング
+                        try:
+                            receipt_data = extract_receipt_info_from_text(ocr_text)
+                            if receipt_data:
+                                logger.info(f"Frame {i}: パターンマッチング成功")
+                        except:
+                            pass
                     
                     if receipt_data and receipt_data.get('vendor'):
                         # Frameオブジェクトを作成
@@ -1892,7 +1888,7 @@ def process_video_ocr_sync(video_id: int, db: Session):
                             video_id=video_id,
                             best_frame_id=frame_obj.id,
                             vendor=receipt_data.get('vendor'),
-                            vendor_norm=analyzer._normalize_text(receipt_data.get('vendor', '')),
+                            vendor_norm=receipt_data.get('vendor', '').lower().replace(' ', ''),
                             document_type=receipt_data.get('document_type', 'レシート'),
                             issue_date=issue_date,
                             currency=receipt_data.get('currency', 'JPY'),
