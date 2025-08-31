@@ -146,8 +146,6 @@ export default function CustomVideoPlayer({
   useEffect(() => {
     const video = videoRef.current
     if (!video || !url) return
-
-    console.log('Video URL changed, reloading:', url)
     
     // 既存のシーク操作をクリア
     if (seekTimeoutRef.current) {
@@ -159,9 +157,11 @@ export default function CustomVideoPlayer({
     setDuration(0)
     setIsPlaying(false)
     
-    // 新しいURLをロード
-    video.src = url
-    video.load()
+    // 新しいURLをロード（srcが異なる場合のみ）
+    if (video.src !== url) {
+      video.src = url
+      video.load()
+    }
   }, [url])
 
   useEffect(() => {
@@ -169,24 +169,16 @@ export default function CustomVideoPlayer({
     if (!video) return
 
     const handleLoadedMetadata = () => {
-      console.log('Video loaded metadata:', {
-        duration: video.duration,
-        currentSrc: video.currentSrc,
-        readyState: video.readyState,
-        videoWidth: video.videoWidth,
-        videoHeight: video.videoHeight
-      })
       setDuration(video.duration)
       onDuration?.(video.duration)
     }
     
     const handleCanPlay = () => {
-      console.log('Video can play - ready for seeking')
-      // ここでビデオが再生可能になったことを確認
+      // ビデオが再生可能になったことを確認
     }
 
     const handleLoadedData = () => {
-      console.log('Video loaded data - fully ready')
+      // ビデオデータロード完了
     }
 
     const handleTimeUpdate = () => {
@@ -195,12 +187,11 @@ export default function CustomVideoPlayer({
     }
 
     const handleSeeked = () => {
-      console.log('Seek completed, currentTime:', video.currentTime)
       setCurrentTime(video.currentTime)
     }
 
     const handleSeeking = () => {
-      console.log('Seeking to:', video.currentTime)
+      // シーク中
     }
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata)
@@ -326,6 +317,7 @@ export default function CustomVideoPlayer({
     >
       <video
         ref={videoRef}
+        src={url}
         className="w-full h-full object-contain"
         onClick={handlePlayPause}
         preload="metadata"
@@ -380,12 +372,10 @@ export default function CustomVideoPlayer({
                     onClick={(e) => {
                       e.stopPropagation()
                       if (!receipt.best_frame || receipt.best_frame.time_ms === undefined) {
-                        console.error('Invalid marker data:', receipt)
                         return
                       }
                       
                       const targetTime = receipt.best_frame.time_ms / 1000
-                      console.log(`Marker click: seeking to ${targetTime}s (${receipt.best_frame.time_ms}ms)`)
                       seekTo(targetTime)
                     }}
                   />
@@ -414,12 +404,10 @@ export default function CustomVideoPlayer({
                     onClick={(e) => {
                       e.stopPropagation()
                       if (!receipt.best_frame || receipt.best_frame.time_ms === undefined) {
-                        console.error('Invalid marker data:', receipt)
                         return
                       }
                       
                       const targetTime = receipt.best_frame.time_ms / 1000
-                      console.log(`Marker click: seeking to ${targetTime}s (${receipt.best_frame.time_ms}ms)`)
                       seekTo(targetTime)
                     }}
                     title={`${receipt.vendor || '領収書'} - ${(receipt.best_frame.time_ms / 1000).toFixed(1)}秒`}

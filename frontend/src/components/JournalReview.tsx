@@ -35,8 +35,36 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [modalReceipt, setModalReceipt] = useState<any>(null)
   const [modalJournal, setModalJournal] = useState<any>(null)
+  const [videoReady, setVideoReady] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const exportMenuRef = useRef<HTMLDivElement>(null)
+
+  // ビデオ要素の準備状態を監視
+  useEffect(() => {
+    const checkVideoReady = () => {
+      const video = videoRef.current
+      if (video && video.readyState >= 2) {
+        setVideoReady(true)
+      }
+    }
+
+    // 定期的にチェック
+    const interval = setInterval(checkVideoReady, 100)
+    
+    // イベントリスナーも追加
+    const video = videoRef.current
+    if (video) {
+      const handleCanPlay = () => setVideoReady(true)
+      video.addEventListener('canplay', handleCanPlay)
+      
+      return () => {
+        clearInterval(interval)
+        video.removeEventListener('canplay', handleCanPlay)
+      }
+    }
+    
+    return () => clearInterval(interval)
+  }, [video?.local_path]) // ビデオパスが変更されたら再実行
 
   // Close export menu when clicking outside
   useEffect(() => {
@@ -109,9 +137,31 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
         
         const video = videoRef.current
         
-        // メタデータがロードされているかチェック
-        if (video.readyState >= 1 && !isNaN(video.duration)) {
-          // 再生停止してシーク
+        // ビデオが準備完了しているかチェック
+        if (!videoReady || video.readyState < 2) {
+          // まだ準備できていない場合は待機
+          const checkInterval = setInterval(() => {
+            if (video.readyState >= 2) {
+              clearInterval(checkInterval)
+              video.pause()
+              setPlaying(false)
+              try {
+                video.currentTime = seconds
+              } catch (e) {
+                toast.error('シーク中にエラーが発生しました')
+              }
+            }
+          }, 100)
+          
+          // タイムアウト設定（3秒）
+          setTimeout(() => {
+            clearInterval(checkInterval)
+            if (video.readyState < 2) {
+              toast.error('ビデオの読み込みに失敗しました')
+            }
+          }, 3000)
+        } else {
+          // 準備完了している場合は即座にシーク
           video.pause()
           setPlaying(false)
           
@@ -120,29 +170,6 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
           } catch (e) {
             toast.error('シーク中にエラーが発生しました')
           }
-        } else {
-          // メタデータがまだロードされていない場合は待機
-          const handleCanPlay = () => {
-            video.removeEventListener('canplay', handleCanPlay)
-            video.pause()
-            setPlaying(false)
-            
-            try {
-              video.currentTime = seconds
-            } catch (e) {
-              toast.error('シーク中にエラーが発生しました')
-            }
-          }
-          
-          video.addEventListener('canplay', handleCanPlay)
-          
-          // タイムアウト設定（3秒）
-          setTimeout(() => {
-            video.removeEventListener('canplay', handleCanPlay)
-            if (video.readyState < 1) {
-              toast.error('ビデオの読み込みに失敗しました')
-            }
-          }, 3000)
         }
       }
       
