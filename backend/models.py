@@ -31,14 +31,50 @@ class PaymentMethod(str, enum.Enum):
     EMONEY = "電子マネー"
     UNKNOWN = "不明"
 
+# ユーザーモデル
+class User(Base):
+    """ユーザーテーブル"""
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    username = Column(String(100), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(255))
+    
+    # アカウント設定
+    is_active = Column(Boolean, default=True)
+    is_superuser = Column(Boolean, default=False)
+    
+    # ストレージ割当量（MB単位）
+    storage_quota_mb = Column(Integer, default=10000)  # デフォルト10GB
+    storage_used_mb = Column(Float, default=0)
+    
+    # タイムスタンプ
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    last_login_at = Column(DateTime(timezone=True))
+    
+    # リレーション
+    videos = relationship("Video", back_populates="user", cascade="all, delete-orphan")
+    receipts = relationship("Receipt", back_populates="user", cascade="all, delete-orphan")
+    journal_entries = relationship("JournalEntry", back_populates="user", cascade="all, delete-orphan")
+    
+    def has_storage_space(self, file_size_mb: float) -> bool:
+        """ストレージ容量チェック"""
+        return (self.storage_used_mb + file_size_mb) <= self.storage_quota_mb
+
 class Video(Base):
     __tablename__ = "videos"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)  # 一時的にnullable
     filename = Column(String(255), nullable=False)
     gcs_uri = Column(String(500))
+    cloud_url = Column(String(500))  # クラウドストレージURL
     local_path = Column(String(500))
     thumbnail_path = Column(String(500))  # サムネイルパス追加
+    file_size_mb = Column(Float)  # ファイルサイズ（MB）
     duration_ms = Column(Integer)
     status = Column(String(20), default="queued", nullable=False)
     progress = Column(Integer, default=0)  # 進行率 0-100
@@ -47,6 +83,8 @@ class Video(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
+    # リレーション
+    user = relationship("User", back_populates="videos")
     frames = relationship("Frame", back_populates="video", cascade="all, delete-orphan")
     receipts = relationship("Receipt", back_populates="video", cascade="all, delete-orphan")
     journal_entries = relationship("JournalEntry", back_populates="video", cascade="all, delete-orphan")
@@ -98,6 +136,7 @@ class Receipt(Base):
     __tablename__ = "receipts"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)  # 一時的にnullable
     video_id = Column(Integer, ForeignKey("videos.id", ondelete="CASCADE"), nullable=False)
     best_frame_id = Column(Integer, ForeignKey("frames.id", ondelete="SET NULL"))
     vendor = Column(String(255))
@@ -118,6 +157,8 @@ class Receipt(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
+    # リレーション
+    user = relationship("User", back_populates="receipts")
     video = relationship("Video", back_populates="receipts")
     best_frame = relationship("Frame", back_populates="receipts")
     duplicate_of = relationship("Receipt", remote_side=[id])
@@ -153,6 +194,7 @@ class JournalEntry(Base):
     __tablename__ = "journal_entries"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)  # 一時的にnullable
     receipt_id = Column(Integer, ForeignKey("receipts.id", ondelete="CASCADE"), nullable=False)
     video_id = Column(Integer, ForeignKey("videos.id", ondelete="CASCADE"), nullable=False)
     time_ms = Column(Integer)
@@ -169,6 +211,8 @@ class JournalEntry(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
+    # リレーション
+    user = relationship("User", back_populates="journal_entries")
     receipt = relationship("Receipt", back_populates="journal_entries")
     video = relationship("Video", back_populates="journal_entries")
     

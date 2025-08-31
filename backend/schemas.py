@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict, field_serializer
+from pydantic import BaseModel, Field, ConfigDict, field_serializer, EmailStr
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 # from enum import Enum  # Enum使用を削除
@@ -336,3 +336,53 @@ class VideoDetailResponse(BaseModel):
     frames: List[FrameResponse] = []
     receipts: List[ReceiptResponse] = []
     journal_entries: List[JournalEntryResponse] = []
+
+# User Schemas
+class UserCreate(BaseModel):
+    email: EmailStr
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+    full_name: Optional[str] = None
+
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    email: str
+    username: str
+    full_name: Optional[str] = None
+    is_active: bool
+    is_superuser: bool
+    storage_quota_mb: int
+    storage_used_mb: float
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    last_login_at: Optional[datetime] = None
+    
+    @field_serializer('created_at')
+    def serialize_created_at(self, dt: datetime) -> str:
+        """created_atを日本時間に変換"""
+        jst_time = to_jst(dt)
+        return jst_time.isoformat() if jst_time else dt.isoformat()
+    
+    @field_serializer('updated_at')
+    def serialize_updated_at(self, dt: Optional[datetime]) -> Optional[str]:
+        """updated_atを日本時間に変換"""
+        if dt is None:
+            return None
+        jst_time = to_jst(dt)
+        return jst_time.isoformat() if jst_time else dt.isoformat()
+    
+    @field_serializer('last_login_at')
+    def serialize_last_login_at(self, dt: Optional[datetime]) -> Optional[str]:
+        """last_login_atを日本時間に変換"""
+        if dt is None:
+            return None
+        jst_time = to_jst(dt)
+        return jst_time.isoformat() if jst_time else dt.isoformat()
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: Optional[str] = None
+    token_type: str = "bearer"
+    expires_in: int  # 秒単位
