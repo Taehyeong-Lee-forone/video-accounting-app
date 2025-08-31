@@ -11,32 +11,43 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, checkAuth, token } = useAuthStore();
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Hydration 完了を待つ
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   useEffect(() => {
-    // トークンがある場合のみバックグラウンドで認証チェック
-    if (token) {
+    // Hydration完了後、トークンがある場合のみバックグラウンドで認証チェック
+    if (isHydrated && token) {
       checkAuth().catch(err => {
         console.error('Auth check error:', err);
       });
     }
-  }, [token, checkAuth]);
+  }, [isHydrated, token, checkAuth]);
 
   useEffect(() => {
+    // Hydration完了後のみリダイレクト処理
+    if (!isHydrated) return;
+    
     // 保護されたパスかチェック
     const isProtectedPath = PROTECTED_PATHS.some(path => pathname.startsWith(path));
     
     // 保護されたパスで認証されていない場合のみログインページへ
-    if (isProtectedPath && !isAuthenticated) {
+    if (isProtectedPath && !isAuthenticated && !token) {
       router.push('/login');
     }
-  }, [isAuthenticated, pathname, router]);
+  }, [isHydrated, isAuthenticated, pathname, router, token]);
 
   // ログインページで認証済みの場合はアプリへ
   useEffect(() => {
+    if (!isHydrated) return;
+    
     if (pathname === '/login' && isAuthenticated) {
       router.push('/app');
     }
-  }, [isAuthenticated, pathname, router]);
+  }, [isHydrated, isAuthenticated, pathname, router]);
 
   // ローディング状態を削除 - 常にchildrenを表示
   return <>{children}</>;

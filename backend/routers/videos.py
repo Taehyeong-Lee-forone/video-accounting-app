@@ -44,6 +44,28 @@ async def test_upload():
         logger.error(f"テストエラー: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
 
+@router.get("/test-ocr")
+async def test_ocr():
+    """OCR設定テスト用エンドポイント"""
+    import os
+    result = {
+        "google_credentials_json": bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")),
+        "google_credentials_file": bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS")),
+        "gemini_api_key": bool(os.getenv("GEMINI_API_KEY")),
+        "render_env": os.getenv("RENDER", "false")
+    }
+    
+    # Vision APIのテスト
+    try:
+        from services.vision_ocr import VisionOCRService
+        ocr_service = VisionOCRService()
+        result["vision_api_initialized"] = bool(ocr_service.client)
+    except Exception as e:
+        result["vision_api_error"] = str(e)
+        result["vision_api_initialized"] = False
+    
+    return result
+
 @router.post("/", response_model=VideoResponse)
 async def upload_video(
     file: UploadFile = File(...),
