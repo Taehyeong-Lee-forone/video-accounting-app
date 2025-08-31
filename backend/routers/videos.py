@@ -207,11 +207,10 @@ async def upload_video(
         
         # 実際のOCR処理を開始
         try:
-            # バックグラウンドで処理を開始
+            # バックグラウンドで処理を開始（新しいセッションを使用）
             background_tasks.add_task(
-                process_video_ocr,
-                video.id,
-                db
+                process_video_ocr_wrapper,
+                video.id
             )
             logger.info(f"OCR処理開始: ID={video.id}")
             
@@ -224,8 +223,12 @@ async def upload_video(
             logger.error(f"OCR処理開始エラー: {e}")
             # エラーでも動画は保存されているので続行
             video.status = "error"
-            video.progress_message = str(e)
-            db.commit()
+            video.progress_message = str(e)[:500]  # エラーメッセージを制限
+            video.error_message = str(e)[:500]
+            try:
+                db.commit()
+            except:
+                db.rollback()
         
         return video
         
@@ -1551,6 +1554,32 @@ async def delete_video(
     
     return {"message": "動画を削除しました"}
 
+def process_video_ocr_wrapper(video_id: int):
+    """バックグラウンドタスク用のラッパー関数"""
+    import asyncio
+    from database import SessionLocal
+    
+    # 新しいデータベースセッションを作成
+    db = SessionLocal()
+    try:
+        # 非同期関数を同期的に実行
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(process_video_ocr(video_id, db))
+    except Exception as e:
+        logger.error(f"OCR処理エラー: {e}", exc_info=True)
+        # エラー状態を記録
+        try:
+            video = db.query(Video).filter(Video.id == video_id).first()
+            if video:
+                video.status = "error"
+                video.error_message = str(e)
+                db.commit()
+        except:
+            pass
+    finally:
+        db.close()
+
 async def process_video_ocr(video_id: int, db: Session):
     """
     実際のOCR処理を実行
@@ -1559,7 +1588,7 @@ async def process_video_ocr(video_id: int, db: Session):
     import asyncio
     import time
     start_time = time.time()
-    max_processing_time = 120  # 最大2分（Render制限対応）
+    max_processing_time = 180  # 最大3分に延長（Render制限対応）
     
     try:
         video = db.query(Video).filter(Video.id == video_id).first()
@@ -1612,10 +1641,15 @@ async def process_video_ocr(video_id: int, db: Session):
         
         logger.info(f"Video info: {duration_sec:.1f}秒, {total_frames}フレーム, {fps:.1f}fps")
         
-        # 2秒ごとにフレーム抽出（処理時間を考慮）
+        # フレーム抽出設定（処理時間とRender制限を考慮）
         extracted_frames = []
-        interval_sec = 3  # 3秒間隔に変更（処理時間短縮）
-        max_frames = 10  # 最大フレーム数を制限
+        # Render環境では処理時間を短縮
+        if os.getenv("RENDER") == "true":
+            interval_sec = 5  # 5秒間隔
+            max_frames = 8  # 最大8フレーム
+        else:
+            interval_sec = 3  # 3秒間隔
+            max_frames = 12  # 最大12フレーム
         frame_count = 0
         for sec in range(0, int(duration_sec) + 1, interval_sec):
             if frame_count >= max_frames:
@@ -1675,15 +1709,16 @@ async def process_video_ocr(video_id: int, db: Session):
                     logger.info(f"Frame {i}: Processing OCR text (first 100 chars): {ocr_text[:100]}")
                     
                     # Gemini APIで領収書データ抽出（タイムアウト付き）
-                    import asyncio
                     try:
+                        # Render環境ではタイムアウトを短く
+                        timeout_sec = 3.0 if os.getenv("RENDER") == "true" else 5.0
                         receipt_data = await asyncio.wait_for(
                             analyzer.extract_receipt_data(frame_info['path'], ocr_text),
-                            timeout=5.0  # 5秒に短縮
+                            timeout=timeout_sec
                         )
                         logger.info(f"Frame {i}: Receipt data extraction result: {bool(receipt_data)}")
                     except asyncio.TimeoutError:
-                        logger.error(f"Frame {i}: Receipt extraction timeout after 5 seconds")
+                        logger.error(f"Frame {i}: Receipt extraction timeout after {timeout_sec} seconds")
                         receipt_data = None
                         # タイムアウトしても処理を続行
                         continue
@@ -1788,5 +1823,9 @@ async def process_video_ocr(video_id: int, db: Session):
         video = db.query(Video).filter(Video.id == video_id).first()
         if video:
             video.status = "error"
-            video.progress_message = str(e)
-            db.commit()
+            video.progress_message = str(e)[:500]  # エラーメッセージを制限
+            video.error_message = str(e)[:500]
+            try:
+                db.commit()
+            except:
+                db.rollback()
