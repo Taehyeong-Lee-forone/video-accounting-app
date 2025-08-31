@@ -507,17 +507,12 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
                 brightness=frame_data['brightness'],
                 contrast=frame_data['contrast'],
                 phash=frame_data['phash'],
-                frame_score=frame_data['frame_score'],
-                frame_path=frame_data['frame_path']
+                frame_score=frame_data.get('quality_score', 0),  # quality_scoreを正しく参照
+                frame_path=frame_data.get('frame_path', '')
             )
             
-            # OCRテキストをマッピング
-            for annotation in ocr_result['text_annotations']:
-                for segment in annotation['segments']:
-                    if segment['start_time_ms'] <= frame_data['time_ms'] <= segment['end_time_ms']:
-                        frame.ocr_text = annotation['text']
-                        frame.ocr_boxes_json = str(segment['frames'])
-                        break
+            # OCRテキストは後で処理されるため、ここでは設定しない
+            # OCR処理は各フレームごとに個別に実行される
             
             db.add(frame)
             frames.append(frame)
@@ -1769,10 +1764,10 @@ def process_video_ocr_sync(video_id: int, db: Session):
         
         # スマートフレーム抽出（品質ベース選別）
         extracted_frames = []
-        max_final_frames = 30  # 最終的に処理する最大フレーム数
-        sample_interval = 0.5  # 0.5秒ごとにサンプリング（まず多めに取得）
+        max_final_frames = 20  # 最終的に処理する最大フレーム数（処理速度改善のため削減）
+        sample_interval = 1.0  # 1秒ごとにサンプリング（処理速度改善）
         
-        # 1. 初期サンプリング：0.5秒ごとにフレーム候補を収集
+        # 1. 初期サンプリング：1秒ごとにフレーム候補を収集
         candidate_frames = []
         for sec_float in [i * sample_interval for i in range(int(duration_sec / sample_interval) + 1)]:
             frame_number = int(sec_float * fps)
@@ -1810,14 +1805,16 @@ def process_video_ocr_sync(video_id: int, db: Session):
                     'time_ms': int(sec_float * 1000),
                     'quality_score': quality_score,
                     'sharpness': sharpness,
-                    'brightness': brightness
+                    'brightness': brightness,
+                    'contrast': contrast,
+                    'phash': ''  # TODO: 後で実装
                 })
         
         # 2. 品質順でソートし、重複を避けながら選別
         candidate_frames.sort(key=lambda x: x['quality_score'], reverse=True)
         
         selected_times = set()
-        min_time_diff = 1000  # 最低1秒の間隔
+        min_time_diff = 1500  # 最低1.5秒の間隔（処理速度改善）
         
         for candidate in candidate_frames:
             if len(extracted_frames) >= max_final_frames:
@@ -1835,8 +1832,13 @@ def process_video_ocr_sync(video_id: int, db: Session):
                 
                 extracted_frames.append({
                     'path': frame_path,
+                    'frame_path': frame_path,  # DB保存用に追加
                     'time_ms': time_ms,
-                    'quality_score': candidate['quality_score']
+                    'quality_score': candidate['quality_score'],
+                    'sharpness': candidate['sharpness'],
+                    'brightness': candidate['brightness'],
+                    'contrast': candidate['contrast'],
+                    'phash': candidate['phash']
                 })
                 selected_times.add(time_ms)
         
@@ -1918,6 +1920,10 @@ def process_video_ocr_sync(video_id: int, db: Session):
                             time_ms=frame_info['time_ms'],
                             frame_path=db_frame_path,
                             ocr_text=ocr_text,
+                            frame_score=frame_info.get('quality_score', 0),  # 品質スコアを保存
+                            sharpness=frame_info.get('sharpness', 0),
+                            brightness=frame_info.get('brightness', 0),
+                            contrast=frame_info.get('contrast', 0),
                             is_best=True
                         )
                         db.add(frame_obj)
