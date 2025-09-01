@@ -10,11 +10,12 @@ import cv2
 import asyncio
 
 from database import get_db
-from models import Video, Frame, Receipt, JournalEntry, ReceiptHistory
+from models import Video, Frame, Receipt, JournalEntry, ReceiptHistory, User
 from schemas import VideoResponse, VideoDetailResponse, VideoAnalyzeRequest, FrameResponse, ReceiptUpdate
 from services.video_intelligence import VideoAnalyzer
 from services.journal_generator import JournalGenerator
 from services.storage import StorageService
+from routers.auth import get_current_active_user
 from celery_app import analyze_video_task
 from video_processing import select_receipt_frames
 
@@ -99,6 +100,7 @@ async def upload_video(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db)
+    # current_user: User = Depends(get_current_active_user)  # 일시적으로 인증 비활성화
 ):
     """動画アップロード"""
     try:
@@ -220,7 +222,7 @@ async def upload_video(
                         
                         # クラウドパス生成 (一時的なファイル名を使用)
                         cloud_thumbnail_path = storage_service.generate_file_path(
-                            user_id=1,  # TODO: 実際のユーザーIDを使用
+                            user_id=1,  # 일시적으로 하드코딩 (인증 비활성화)
                             filename=f"thumbnail_{timestamp}.jpg",
                             file_type="thumbnail"
                         )
@@ -262,6 +264,7 @@ async def upload_video(
             thumbnail_path=str(thumbnail_path) if thumbnail_path else None,  # 文字列に変換して保存
             status="processing",  # 自動的に処理開始
             progress=10  # 初期進捗を10に設定
+            # user_id=current_user.id  # 일시적으로 비활성화
         )
         db.add(video)
         db.commit()
@@ -275,7 +278,7 @@ async def upload_video(
                 
                 # クラウドパス生成
                 cloud_thumbnail_path = storage_service.generate_file_path(
-                    user_id=1,  # TODO: 実際のユーザーIDを使用
+                    user_id=1,  # 일시적으로 하드코딩 (인증 비활성화)
                     filename=f"thumbnail_{video.id}.jpg",
                     file_type="thumbnail"
                 )
@@ -1320,7 +1323,7 @@ async def analyze_frame_at_time(
                 
                 # クラウドパス生成
                 cloud_frame_path = storage_service.generate_file_path(
-                    user_id=1,  # TODO: 実際のユーザーIDを使用
+                    user_id=video.user_id if video.user_id else 1,  # VideoのユーザーIDを使用
                     filename=frame_filename,
                     file_type="frame"
                 )
@@ -1549,7 +1552,7 @@ async def update_receipt_frame(
                 
                 # クラウドパス生成
                 cloud_frame_path = storage_service.generate_file_path(
-                    user_id=1,  # TODO: 実際のユーザーIDを使用
+                    user_id=video.user_id if video.user_id else 1,  # VideoのユーザーIDを使用
                     filename=frame_filename,
                     file_type="frame"
                 )
