@@ -123,11 +123,19 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
       return
     }
     
+    // デバッグログ追加
+    console.log('=== Receipt Click Debug ===')
+    console.log('Receipt ID:', receipt.id)
+    console.log('Best frame:', receipt.best_frame)
+    console.log('Best frame time_ms:', receipt.best_frame?.time_ms)
+    console.log('Full receipt data:', JSON.stringify(receipt, null, 2))
+    
     setSelectedReceipt(receipt)
     
     // ビデオシーク
-    if (receipt.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== null) {
+    if (receipt.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== null && receipt.best_frame.time_ms > 0) {
       const seconds = receipt.best_frame.time_ms / 1000
+      console.log('Seeking to:', seconds, 'seconds')
       
       const performSeek = () => {
         if (!videoRef.current) {
