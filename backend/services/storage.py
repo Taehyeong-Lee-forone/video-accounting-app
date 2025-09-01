@@ -98,6 +98,53 @@ class StorageService:
             logger.error(f"Upload failed: {e}")
             return False, str(e)
     
+    def upload_file_sync(self, file_content: bytes, file_path: str, content_type: str = None) -> Tuple[bool, str]:
+        """
+        同期版アップロード
+        
+        Returns:
+            (success: bool, url_or_error: str)
+        """
+        try:
+            if self.storage_type == "supabase":
+                return self._upload_supabase_sync(file_content, file_path, content_type)
+            elif self.storage_type == "s3":
+                return self._upload_s3_sync(file_content, file_path, content_type)
+            elif self.storage_type == "gcs":
+                return self._upload_gcs_sync(file_content, file_path, content_type)
+        except Exception as e:
+            logger.error(f"Upload failed: {e}")
+            return False, str(e)
+    
+    def _upload_supabase_sync(self, file_content: bytes, file_path: str, content_type: str) -> Tuple[bool, str]:
+        """Supabase Storageに同期アップロード"""
+        try:
+            # Supabase Storageにアップロード
+            response = self.client.storage.from_(self.bucket_name).upload(
+                path=file_path,
+                file=file_content,
+                file_options={"content-type": content_type or "video/mp4", "upsert": "true"}
+            )
+            
+            # レスポンスを確認
+            logger.info(f"Supabase upload response: {response}")
+            
+            # エラーチェック
+            if hasattr(response, 'error') and response.error:
+                logger.error(f"Supabase upload error: {response.error}")
+                return False, str(response.error)
+            
+            # 公開URLを取得
+            public_url = self.client.storage.from_(self.bucket_name).get_public_url(file_path)
+            
+            logger.info(f"Uploaded to Supabase: {file_path}, URL: {public_url}")
+            return True, public_url
+        except Exception as e:
+            logger.error(f"Supabase upload error: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return False, str(e)
+    
     async def _upload_supabase(self, file_content: bytes, file_path: str, content_type: str) -> Tuple[bool, str]:
         """Supabase Storageにアップロード"""
         try:
@@ -115,6 +162,44 @@ class StorageService:
             return True, public_url
         except Exception as e:
             logger.error(f"Supabase upload error: {e}")
+            return False, str(e)
+    
+    def _upload_s3_sync(self, file_content: bytes, file_path: str, content_type: str) -> Tuple[bool, str]:
+        """AWS S3に同期アップロード"""
+        try:
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=file_path,
+                Body=file_content,
+                ContentType=content_type or "video/mp4"
+            )
+            
+            # 署名付きURL生成（7日間有効）
+            url = self.s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': self.bucket_name, 'Key': file_path},
+                ExpiresIn=604800  # 7 days
+            )
+            
+            logger.info(f"Uploaded to S3: {file_path}")
+            return True, url
+        except ClientError as e:
+            logger.error(f"S3 upload error: {e}")
+            return False, str(e)
+    
+    def _upload_gcs_sync(self, file_content: bytes, file_path: str, content_type: str) -> Tuple[bool, str]:
+        """Google Cloud Storageに同期アップロード"""
+        try:
+            blob = self.bucket.blob(file_path)
+            blob.upload_from_string(file_content, content_type=content_type or "video/mp4")
+            
+            # 公開URLを取得
+            url = blob.public_url
+            
+            logger.info(f"Uploaded to GCS: {file_path}")
+            return True, url
+        except Exception as e:
+            logger.error(f"GCS upload error: {e}")
             return False, str(e)
     
     async def _upload_s3(self, file_content: bytes, file_path: str, content_type: str) -> Tuple[bool, str]:

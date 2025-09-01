@@ -7,18 +7,30 @@ import shutil
 from pathlib import Path
 import logging
 import cv2
+import asyncio
 
 from database import get_db
 from models import Video, Frame, Receipt, JournalEntry, ReceiptHistory
 from schemas import VideoResponse, VideoDetailResponse, VideoAnalyzeRequest, FrameResponse, ReceiptUpdate
 from services.video_intelligence import VideoAnalyzer
 from services.journal_generator import JournalGenerator
+from services.storage import StorageService
 from celery_app import analyze_video_task
 from video_processing import select_receipt_frames
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Supabase Storage サービス初期化
+try:
+    storage_service = StorageService()
+    use_cloud_storage = True
+    logger.info("Cloud storage (Supabase) initialized successfully")
+except Exception as e:
+    logger.warning(f"Cloud storage initialization failed: {e}. Using local storage.")
+    storage_service = None
+    use_cloud_storage = False
 
 @router.post("/test")
 async def test_upload():
@@ -140,10 +152,37 @@ async def upload_video(
                 raise HTTPException(400, "ファイルサイズが大きすぎます（最大100MB）")
             
             # ファイル内容を保存
+            # ローカル保存（一時的）
             with file_path.open("wb") as buffer:
                 buffer.write(file_content)
             
             logger.info(f"ファイル保存成功: {file_path.exists()}")
+            
+            # Supabase Storageにアップロード
+            cloud_url = None
+            if use_cloud_storage and storage_service:
+                try:
+                    # ファイルパス生成（user_idは0で仮設定、後でユーザー認証追加時に修正）
+                    cloud_path = storage_service.generate_file_path(0, unique_filename, "video")
+                    
+                    # アップロード実行
+                    loop = asyncio.get_event_loop()
+                    success, result = await loop.run_in_executor(
+                        None,
+                        storage_service.upload_file_sync,
+                        file_content,
+                        cloud_path,
+                        "video/mp4"
+                    )
+                    
+                    if success:
+                        cloud_url = result
+                        logger.info(f"Cloud storage upload successful: {cloud_url}")
+                    else:
+                        logger.warning(f"Cloud storage upload failed: {result}")
+                except Exception as e:
+                    logger.error(f"Cloud storage upload error: {e}")
+                    # クラウドアップロード失敗してもローカルは成功しているので続行
         except HTTPException:
             raise
         except Exception as e:
@@ -172,14 +211,43 @@ async def upload_video(
                 resized = cv2.resize(frame, (new_width, new_height))
                 cv2.imwrite(str(thumbnail_path), resized)
                 logger.info(f"Thumbnail created: {thumbnail_path}")
+                
+                # Supabase Storageにサムネイルをアップロード
+                if use_cloud_storage and storage_service:
+                    try:
+                        with open(thumbnail_path, 'rb') as f:
+                            thumbnail_content = f.read()
+                        
+                        # クラウドパス生成 (一時的なファイル名を使用)
+                        cloud_thumbnail_path = storage_service.generate_file_path(
+                            user_id=1,  # TODO: 実際のユーザーIDを使用
+                            filename=f"thumbnail_{timestamp}.jpg",
+                            file_type="thumbnail"
+                        )
+                        
+                        success, thumbnail_cloud_url = storage_service.upload_file_sync(
+                            file_content=thumbnail_content,
+                            file_path=cloud_thumbnail_path,
+                            content_type="image/jpeg"
+                        )
+                        
+                        if success:
+                            logger.info(f"Thumbnail uploaded to cloud: {thumbnail_cloud_url}")
+                            # DBにクラウドURLを保存
+                            thumbnail_path = thumbnail_cloud_url
+                    except Exception as e:
+                        logger.warning(f"Failed to upload thumbnail to cloud: {e}")
             cap.release()
         except Exception as e:
             logger.warning(f"Thumbnail generation failed: {e}")
             thumbnail_path = None
         
         # DB登録 - 元のファイル名を保持
-        # Render環境では/tmpに保存するが、パスはuploadsとして記録
-        if os.getenv("RENDER") == "true":
+        # クラウドURLがあれば優先、なければローカルパス
+        if cloud_url:
+            db_video_path = cloud_url
+            logger.info(f"Using cloud URL for video: {cloud_url}")
+        elif os.getenv("RENDER") == "true":
             # /tmp/videos/xxx.mp4 -> uploads/videos/xxx.mp4
             db_video_path = str(file_path).replace("/tmp/", "uploads/")
             db_thumbnail_path = str(thumbnail_path).replace("/tmp/", "uploads/") if thumbnail_path else None
@@ -189,14 +257,42 @@ async def upload_video(
             
         video = Video(
             filename=file.filename,  # 元のファイル名を保持
-            local_path=db_video_path,  # DBには統一されたパスを保存
-            thumbnail_path=db_thumbnail_path,
+            local_path=db_video_path,  # DBにはクラウドURLまたはローカルパスを保存
+            gcs_uri=cloud_url,  # クラウドURLを別途保存
+            thumbnail_path=str(thumbnail_path) if thumbnail_path else None,  # 文字列に変換して保存
             status="processing",  # 自動的に処理開始
             progress=10  # 初期進捗を10に設定
         )
         db.add(video)
         db.commit()
         db.refresh(video)
+        
+        # サムネイルをクラウドにアップロード（video.idが利用可能になった後）
+        if thumbnail_path and use_cloud_storage and storage_service:
+            try:
+                with open(thumbnail_path, 'rb') as f:
+                    thumbnail_content = f.read()
+                
+                # クラウドパス生成
+                cloud_thumbnail_path = storage_service.generate_file_path(
+                    user_id=1,  # TODO: 実際のユーザーIDを使用
+                    filename=f"thumbnail_{video.id}.jpg",
+                    file_type="thumbnail"
+                )
+                
+                success, thumbnail_cloud_url = storage_service.upload_file_sync(
+                    file_content=thumbnail_content,
+                    file_path=cloud_thumbnail_path,
+                    content_type="image/jpeg"
+                )
+                
+                if success:
+                    logger.info(f"Thumbnail uploaded to cloud: {thumbnail_cloud_url}")
+                    # DBのサムネイルパスを更新
+                    video.thumbnail_path = thumbnail_cloud_url
+                    db.commit()
+            except Exception as e:
+                logger.warning(f"Failed to upload thumbnail to cloud: {e}")
         
         # VideoResponseに必要な追加フィールドを設定
         video.receipts_count = 0
@@ -1216,6 +1312,31 @@ async def analyze_frame_at_time(
         cv2.imwrite(actual_frame_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 100])  # 最高品質で保存
         cap.release()
         
+        # Supabase Storageにフレームをアップロード
+        if use_cloud_storage and storage_service:
+            try:
+                with open(actual_frame_path, 'rb') as f:
+                    frame_content = f.read()
+                
+                # クラウドパス生成
+                cloud_frame_path = storage_service.generate_file_path(
+                    user_id=1,  # TODO: 実際のユーザーIDを使用
+                    filename=frame_filename,
+                    file_type="frame"
+                )
+                
+                success, frame_cloud_url = storage_service.upload_file_sync(
+                    file_content=frame_content,
+                    file_path=cloud_frame_path,
+                    content_type="image/jpeg"
+                )
+                
+                if success:
+                    logger.info(f"Frame uploaded to cloud: {frame_cloud_url}")
+                    db_frame_path = frame_cloud_url
+            except Exception as e:
+                logger.warning(f"Failed to upload frame to cloud: {e}")
+        
         logger.info(f"Frame capture - Requested: {time_ms}ms (frame {target_frame}), Actual: {actual_time_ms}ms (frame {actual_frame}), FPS: {fps}")
         
         # フレーム品質分析（実際の時刻を使用）
@@ -1419,6 +1540,31 @@ async def update_receipt_frame(
         
         output_dir.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(actual_frame_path, frame)
+        
+        # Supabase Storageにフレームをアップロード
+        if use_cloud_storage and storage_service:
+            try:
+                with open(actual_frame_path, 'rb') as f:
+                    frame_content = f.read()
+                
+                # クラウドパス生成
+                cloud_frame_path = storage_service.generate_file_path(
+                    user_id=1,  # TODO: 実際のユーザーIDを使用
+                    filename=frame_filename,
+                    file_type="frame"
+                )
+                
+                success, frame_cloud_url = storage_service.upload_file_sync(
+                    file_content=frame_content,
+                    file_path=cloud_frame_path,
+                    content_type="image/jpeg"
+                )
+                
+                if success:
+                    logger.info(f"Frame uploaded to cloud: {frame_cloud_url}")
+                    db_frame_path = frame_cloud_url
+            except Exception as e:
+                logger.warning(f"Failed to upload frame to cloud: {e}")
         
         # 画像分析（品質スコア、pHash等）
         analyzer = VideoAnalyzer()
@@ -1911,9 +2057,36 @@ def process_video_ocr_sync(video_id: int, db: Session):
                 frame_path = str(frames_dir / frame_filename)
                 cv2.imwrite(frame_path, candidate['frame'])
                 
+                # Supabase Storageにフレームをアップロード
+                frame_cloud_url = frame_path  # デフォルトはローカルパス
+                if use_cloud_storage and storage_service:
+                    try:
+                        # JPEGエンコード
+                        _, buffer = cv2.imencode('.jpg', candidate['frame'], [cv2.IMWRITE_JPEG_QUALITY, 95])
+                        frame_content = buffer.tobytes()
+                        
+                        # クラウドパス生成
+                        cloud_frame_path = storage_service.generate_file_path(
+                            user_id=1,  # TODO: 実際のユーザーIDを使用
+                            filename=frame_filename,
+                            file_type="frame"
+                        )
+                        
+                        success, cloud_url = storage_service.upload_file_sync(
+                            file_content=frame_content,
+                            file_path=cloud_frame_path,
+                            content_type="image/jpeg"
+                        )
+                        
+                        if success:
+                            logger.info(f"Frame uploaded to cloud: {cloud_url}")
+                            frame_cloud_url = cloud_url
+                    except Exception as e:
+                        logger.warning(f"Failed to upload frame to cloud: {e}")
+                
                 extracted_frames.append({
                     'path': frame_path,
-                    'frame_path': frame_path,  # DB保存用に追加
+                    'frame_path': frame_cloud_url,  # クラウドURLまたはローカルパス
                     'time_ms': time_ms,
                     'quality_score': candidate['quality_score'],
                     'sharpness': candidate['sharpness'],
@@ -2000,9 +2173,38 @@ def process_video_ocr_sync(video_id: int, db: Session):
                     
                     if receipt_data and receipt_data.get('vendor'):
                         # Frameオブジェクトを作成
-                        # Render環境での経路調整
+                        # フレームイメージをSupabaseにアップロード
                         db_frame_path = frame_info['path']
-                        if os.getenv("RENDER") == "true":
+                        cloud_frame_url = None
+                        
+                        if use_cloud_storage and storage_service:
+                            try:
+                                # フレームファイルを読み込み
+                                with open(frame_info['path'], 'rb') as f:
+                                    frame_content = f.read()
+                                
+                                # ファイルパス生成
+                                frame_filename = os.path.basename(frame_info['path'])
+                                cloud_frame_path = storage_service.generate_file_path(0, frame_filename, "frame")
+                                
+                                # アップロード
+                                success, result = storage_service.upload_file_sync(
+                                    frame_content,
+                                    cloud_frame_path,
+                                    "image/jpeg"
+                                )
+                                
+                                if success:
+                                    cloud_frame_url = result
+                                    db_frame_path = cloud_frame_url
+                                    logger.info(f"Frame uploaded to cloud: {cloud_frame_url}")
+                                else:
+                                    logger.warning(f"Frame cloud upload failed: {result}")
+                            except Exception as e:
+                                logger.error(f"Frame cloud upload error: {e}")
+                        
+                        # Render環境での経路調整（クラウド保存失敗時）
+                        if not cloud_frame_url and os.getenv("RENDER") == "true":
                             db_frame_path = db_frame_path.replace("/tmp/", "uploads/")
                         
                         try:
