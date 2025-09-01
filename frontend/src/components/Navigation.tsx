@@ -52,7 +52,7 @@ export default function Navigation() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            {isAuthenticated && user && (
+            {isAuthenticated && user ? (
               <>
                 <span className="text-sm text-gray-600">
                   {user.username}
@@ -65,6 +65,14 @@ export default function Navigation() {
                   ログアウト
                 </button>
               </>
+            ) : (
+              <Link
+                href="/login"
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ArrowRightOnRectangleIcon className="h-4 w-4 mr-1 rotate-180" />
+                ログイン
+              </Link>
             )}
             <Link
               href="/app"
