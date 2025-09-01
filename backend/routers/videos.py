@@ -15,7 +15,7 @@ from schemas import VideoResponse, VideoDetailResponse, VideoAnalyzeRequest, Fra
 from services.video_intelligence import VideoAnalyzer
 from services.journal_generator import JournalGenerator
 from services.storage import StorageService
-from routers.auth import get_current_active_user
+from routers.auth import get_optional_current_user
 from celery_app import analyze_video_task
 from video_processing import select_receipt_frames
 
@@ -99,8 +99,8 @@ async def test_ocr():
 async def upload_video(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    db: Session = Depends(get_db)
-    # current_user: User = Depends(get_current_active_user)  # 일시적으로 인증 비활성화
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     """動画アップロード"""
     try:
@@ -222,7 +222,7 @@ async def upload_video(
                         
                         # クラウドパス生成 (一時的なファイル名を使用)
                         cloud_thumbnail_path = storage_service.generate_file_path(
-                            user_id=1,  # 일시적으로 하드코딩 (인증 비활성화)
+                            user_id=current_user.id if current_user else 1,
                             filename=f"thumbnail_{timestamp}.jpg",
                             file_type="thumbnail"
                         )
@@ -263,8 +263,8 @@ async def upload_video(
             gcs_uri=cloud_url,  # クラウドURLを別途保存
             thumbnail_path=str(thumbnail_path) if thumbnail_path else None,  # 文字列に変換して保存
             status="processing",  # 自動的に処理開始
-            progress=10  # 初期進捗を10に設定
-            # user_id=current_user.id  # 일시적으로 비활성화
+            progress=10,  # 初期進捗を10に設定
+            user_id=current_user.id if current_user else None  # ログインしている場合のみユーザーIDを設定
         )
         db.add(video)
         db.commit()
@@ -278,7 +278,7 @@ async def upload_video(
                 
                 # クラウドパス生成
                 cloud_thumbnail_path = storage_service.generate_file_path(
-                    user_id=1,  # 일시적으로 하드코딩 (인증 비활성화)
+                    user_id=current_user.id if current_user else 1,
                     filename=f"thumbnail_{video.id}.jpg",
                     file_type="thumbnail"
                 )
@@ -925,7 +925,11 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
         db.commit()
 
 @router.get("/{video_id}", response_model=VideoDetailResponse)
-async def get_video(video_id: int, db: Session = Depends(get_db)):
+async def get_video(
+    video_id: int, 
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
     """動画詳細取得"""
     try:
         # receiptsとbest_frame、history関係を一緒にロード
@@ -936,6 +940,14 @@ async def get_video(video_id: int, db: Session = Depends(get_db)):
         
         if not video:
             raise HTTPException(404, "動画が見つかりません")
+        
+        # 権限チェック: ログインユーザーは自分の動画のみ、未ログインはuser_idがNULLの動画のみ
+        if current_user:
+            if video.user_id != current_user.id:
+                raise HTTPException(403, "この動画にアクセスする権限がありません")
+        else:
+            if video.user_id is not None:
+                raise HTTPException(403, "この動画にアクセスする権限がありません")
         
         # レシートをフレーム時間順にソート
         if video.receipts:
@@ -985,12 +997,21 @@ async def get_frame(video_id: int, ms: int, db: Session = Depends(get_db)):
 async def list_videos(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     """動画一覧取得"""
     try:
+        # ユーザーがログインしている場合は自分の動画のみ、そうでない場合は全て
+        query = db.query(Video)
+        if current_user:
+            query = query.filter(Video.user_id == current_user.id)
+        else:
+            # 未ログインユーザーは user_id が NULL の動画のみ
+            query = query.filter(Video.user_id == None)
+        
         # 最新のビデオが先に来るようにソート
-        videos = db.query(Video).order_by(Video.created_at.desc()).offset(skip).limit(limit).all()
+        videos = query.order_by(Video.created_at.desc()).offset(skip).limit(limit).all()
         
         # 各ビデオにレシート数を追加（自動/手動区分）
         for video in videos:
