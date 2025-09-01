@@ -44,12 +44,21 @@ if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:
     # PostgreSQL接続設定
+    # Render PostgreSQLのSSL設定を追加
+    connect_args = {}
+    if "render.com" in DATABASE_URL:
+        # RenderのPostgreSQLはSSL必須
+        connect_args = {
+            "sslmode": "require"
+        }
+    
     engine = create_engine(
         DATABASE_URL,
         pool_size=10,
         max_overflow=20,
         pool_pre_ping=True,  # 接続の健全性チェック
-        pool_recycle=3600    # 1時間ごとに接続をリサイクル
+        pool_recycle=3600,   # 1時間ごとに接続をリサイクル
+        connect_args=connect_args
     )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
