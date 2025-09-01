@@ -80,7 +80,7 @@ export default function LoginForm() {
                     autoComplete="username"
                     required
                     className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="admin または admin@example.com"
+                    placeholder="ユーザー名またはメールアドレスを入力"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                   />
