@@ -932,10 +932,11 @@ async def get_video(
 ):
     """動画詳細取得"""
     try:
-        # receiptsとbest_frame、history関係を一緒にロード
+        # receipts、best_frame、history、journal_entries関係を一緒にロード
         video = db.query(Video).options(
             joinedload(Video.receipts).joinedload(Receipt.best_frame),
-            joinedload(Video.receipts).joinedload(Receipt.history)
+            joinedload(Video.receipts).joinedload(Receipt.history),
+            joinedload(Video.journal_entries)  # 仕訳データも読み込む
         ).filter(Video.id == video_id).first()
         
         if not video:
