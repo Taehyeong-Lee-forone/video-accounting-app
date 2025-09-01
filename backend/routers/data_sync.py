@@ -120,9 +120,9 @@ async def import_data(
         imported_count = 0
         
         for video_data in data.get("videos", []):
-            # 既存の動画をチェック（storage_pathで重複確認）
+            # 既存の動画をチェック（filenameで重複確認）
             existing_video = db.query(Video).filter(
-                Video.storage_path == video_data.get("storage_path"),
+                Video.filename == video_data.get("filename"),
                 Video.user_id == current_user.id
             ).first()
             
@@ -134,15 +134,15 @@ async def import_data(
             new_video = Video(
                 user_id=current_user.id,
                 filename=video_data["filename"],
-                file_url=video_data.get("file_url"),
-                storage_path=video_data.get("storage_path"),
-                processed=video_data.get("processed", False),
-                status=video_data.get("status", "completed"),
-                thumbnail_url=video_data.get("thumbnail_url")
+                cloud_url=video_data.get("cloud_url"),
+                local_path=video_data.get("local_path"),
+                gcs_uri=video_data.get("gcs_uri"),
+                status=video_data.get("status", "done"),
+                thumbnail_path=video_data.get("thumbnail_path")
             )
             
-            if video_data.get("uploaded_at"):
-                new_video.uploaded_at = datetime.fromisoformat(video_data["uploaded_at"])
+            if video_data.get("created_at"):
+                new_video.created_at = datetime.fromisoformat(video_data["created_at"])
             
             db.add(new_video)
             db.flush()  # IDを取得
@@ -151,12 +151,13 @@ async def import_data(
             for frame_data in video_data.get("frames", []):
                 new_frame = Frame(
                     video_id=new_video.id,
-                    frame_number=frame_data["frame_number"],
-                    timestamp=frame_data["timestamp"],
-                    file_url=frame_data.get("file_url"),
-                    storage_path=frame_data.get("storage_path"),
-                    has_receipt=frame_data.get("has_receipt", False),
-                    confidence_score=frame_data.get("confidence_score")
+                    time_ms=frame_data.get("time_ms", 0),
+                    sharpness=frame_data.get("sharpness"),
+                    brightness=frame_data.get("brightness"),
+                    contrast=frame_data.get("contrast"),
+                    ocr_text=frame_data.get("ocr_text"),
+                    is_best=frame_data.get("is_best", False),
+                    frame_score=frame_data.get("frame_score")
                 )
                 db.add(new_frame)
             
@@ -164,31 +165,45 @@ async def import_data(
             for receipt_data in video_data.get("receipts", []):
                 new_receipt = Receipt(
                     video_id=new_video.id,
-                    store_name=receipt_data.get("store_name"),
-                    total_amount=receipt_data.get("total_amount"),
-                    tax_amount=receipt_data.get("tax_amount"),
-                    date=datetime.fromisoformat(receipt_data["date"]) if receipt_data.get("date") else None,
-                    items=json.dumps(receipt_data.get("items", [])),
+                    vendor=receipt_data.get("vendor"),
+                    vendor_norm=receipt_data.get("vendor_norm"),
+                    total=receipt_data.get("total"),
+                    subtotal=receipt_data.get("subtotal"),
+                    tax=receipt_data.get("tax"),
+                    tax_rate=receipt_data.get("tax_rate"),
+                    issue_date=datetime.fromisoformat(receipt_data["issue_date"]) if receipt_data.get("issue_date") else None,
                     payment_method=receipt_data.get("payment_method"),
-                    confidence_score=receipt_data.get("confidence_score"),
-                    ai_analysis=json.dumps(receipt_data.get("ai_analysis")) if receipt_data.get("ai_analysis") else None
+                    document_type=receipt_data.get("document_type"),
+                    status=receipt_data.get("status", "unconfirmed"),
+                    memo=receipt_data.get("memo")
                 )
                 db.add(new_receipt)
                 db.flush()
                 
-                # 仕訳を追加
-                for entry_data in video_data.get("journal_entries", []):
+            # 仕訳を追加 (receiptとは独立して追加)
+            for entry_data in video_data.get("journal_entries", []):
+                # 対応するレシートを探す（簡易的にインデックスで対応）
+                receipt_id = None
+                if video_data.get("receipts"):
+                    # 最初のレシートに関連付け（実際の実装では適切なマッピングが必要）
+                    first_receipt = db.query(Receipt).filter(
+                        Receipt.video_id == new_video.id
+                    ).first()
+                    if first_receipt:
+                        receipt_id = first_receipt.id
+                
+                if receipt_id:
                     new_entry = JournalEntry(
-                        receipt_id=new_receipt.id,
+                        receipt_id=receipt_id,
                         video_id=new_video.id,
-                        date=datetime.fromisoformat(entry_data["date"]) if entry_data.get("date") else None,
-                        description=entry_data.get("description"),
+                        time_ms=entry_data.get("time_ms"),
                         debit_account=entry_data.get("debit_account"),
                         credit_account=entry_data.get("credit_account"),
-                        amount=entry_data.get("amount"),
+                        debit_amount=entry_data.get("debit_amount"),
+                        credit_amount=entry_data.get("credit_amount"),
+                        tax_account=entry_data.get("tax_account"),
                         tax_amount=entry_data.get("tax_amount"),
-                        tax_rate=entry_data.get("tax_rate"),
-                        memo=entry_data.get("memo")
+                        status=entry_data.get("status", "unconfirmed")
                     )
                     db.add(new_entry)
             
