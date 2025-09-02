@@ -32,11 +32,16 @@ export const useAuthStore = create<AuthState>()(
 
       login: async (username: string, password: string) => {
         try {
+          // デバッグログ追加
+          console.log('🔐 Login attempt:', { username, API_BASE_URL });
+          
           // FormDataとして送信（OAuth2仕様）
           const formData = new URLSearchParams();
           formData.append('username', username);
           formData.append('password', password);
 
+          console.log('📤 Sending login request to:', `${API_BASE_URL}/api/auth/login`);
+          
           const response = await axios.post(
             `${API_BASE_URL}/api/auth/login`,
             formData,
@@ -65,7 +70,14 @@ export const useAuthStore = create<AuthState>()(
 
           // Axiosのデフォルトヘッダーに設定
           axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+          
+          console.log('✅ Login successful!');
         } catch (error: any) {
+          console.error('❌ Login error:', {
+            status: error.response?.status,
+            data: error.response?.data,
+            message: error.message
+          });
           throw new Error(
             error.response?.data?.detail || 'ログインに失敗しました'
           );
