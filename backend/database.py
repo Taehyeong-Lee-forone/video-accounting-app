@@ -14,27 +14,33 @@ logger.setLevel(logging.INFO)
 logger.info(f"RENDER環境: {os.getenv('RENDER', 'false')}")
 logger.info(f"DATABASE_URL設定: {'設定済み' if os.getenv('DATABASE_URL') else '未設定'}")
 
-# DATABASE_URLを取得（Render環境では必須）
+# DATABASE_URLを取得
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Render環境では必ずPostgreSQLを使用
+# Render環境では環境変数DATABASE_URLが自動設定される
+# それ以外の環境ではローカルSQLiteまたは明示的に指定されたDBを使用
+
+# 環境に応じてデータベースを選択
 if os.getenv("RENDER") == "true":
-    # Render環境ではUSE_SQLITEを無視
+    # Render環境 - 環境変数またはRender PostgreSQLを使用
     if not DATABASE_URL:
-        # Supabase PostgreSQL URLを直接使用（緊急対応）
-        DATABASE_URL = "postgresql://postgres:ZgqvGBD34FBaVXb8@db.cphbbpvhfbmwqkcrhhwm.supabase.co:5432/postgres"
-        logger.warning("⚠️ DATABASE_URL未設定 - Supabase PostgreSQLをデフォルトで使用")
-    logger.info("Render環境 - PostgreSQL (Supabase)を使用")
-elif not DATABASE_URL:
-    # ローカル開発環境用のフォールバック
-    logger.warning("DATABASE_URL未設定 - SQLiteを使用")
-    DATABASE_URL = "sqlite:///./video_accounting.db"
+        # RenderがPostgreSQLを提供していない場合のエラー
+        logger.error("❌ Render環境でDATABASE_URLが設定されていません")
+        logger.error("Renderダッシュボードで以下を設定してください:")
+        logger.error("1. PostgreSQL データベースを追加")
+        logger.error("2. DATABASE_URL環境変数が自動設定されます")
+        # 一時的にSQLiteを使用（データは永続化されません）
+        DATABASE_URL = "sqlite:///./temp_video_accounting.db"
+        logger.warning("⚠️ 一時的にSQLiteを使用 - データは永続化されません！")
+    else:
+        logger.info("🔷 Render PostgreSQLを使用 - データ永続化保証")
+elif DATABASE_URL:
+    # 環境変数で指定されたDBを使用
+    logger.info(f"指定されたデータベースを使用: {DATABASE_URL[:30]}...")
 else:
-    # URLの一部を隠してログ出力
-    if "pooler.supabase.com" in DATABASE_URL:
-        logger.info("Supabase Pooler接続を使用")
-    elif "supabase.co" in DATABASE_URL:
-        logger.warning("⚠️ Direct接続を使用中 - Pooler接続に変更してください")
+    # ローカル開発用 - SQLiteを使用（ローカルでは永続化される）
+    DATABASE_URL = "sqlite:///./video_accounting.db"
+    logger.info("📁 ローカルSQLiteを使用")
     
     # パスワード部分を隠してログ出力
     safe_url = DATABASE_URL.split('@')[0].split(':')[0] + ":****@" + DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else DATABASE_URL[:50]
