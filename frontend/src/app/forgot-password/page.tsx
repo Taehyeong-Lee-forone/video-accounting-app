@@ -23,15 +23,29 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
-      // 実際のパスワードリセット機能は未実装
-      // TODO: バックエンドAPIを実装する必要があります
+      // バックエンドAPIを呼び出す
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      })
       
-      // デモ用の処理
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      const data = await response.json()
       
-      // 成功メッセージを表示
-      setIsSubmitted(true)
-      toast.success('パスワードリセットメールを送信しました')
+      if (response.ok && data.success) {
+        // 成功メッセージを表示
+        setIsSubmitted(true)
+        toast.success('パスワードリセットメールを送信しました')
+        
+        // デモモードの場合はトークンを表示
+        if (data.message && data.message.includes('デモモード')) {
+          console.log('Reset token:', data.message)
+        }
+      } else {
+        throw new Error(data.detail || 'リセットメールの送信に失敗しました')
+      }
       
     } catch (error) {
       toast.error('エラーが発生しました。もう一度お試しください。')
@@ -129,20 +143,6 @@ export default function ForgotPasswordPage() {
                 </div>
               </div>
 
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-yellow-700">
-                      注意: この機能はデモ用です。実際のメール送信は行われません。
-                    </p>
-                  </div>
-                </div>
-              </div>
 
               <div className="flex items-center justify-center">
                 <Link
