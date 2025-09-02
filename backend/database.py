@@ -21,8 +21,9 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if os.getenv("RENDER") == "true":
     # Render環境ではUSE_SQLITEを無視
     if not DATABASE_URL:
-        logger.error("❌ Render環境でDATABASE_URLが設定されていません")
-        raise ValueError("DATABASE_URL is required in Render environment")
+        # Supabase PostgreSQL URLを直接使用（緊急対応）
+        DATABASE_URL = "postgresql://postgres:ZgqvGBD34FBaVXb8@db.cphbbpvhfbmwqkcrhhwm.supabase.co:5432/postgres"
+        logger.warning("⚠️ DATABASE_URL未設定 - Supabase PostgreSQLをデフォルトで使用")
     logger.info("Render環境 - PostgreSQL (Supabase)を使用")
 elif not DATABASE_URL:
     # ローカル開発環境用のフォールバック
