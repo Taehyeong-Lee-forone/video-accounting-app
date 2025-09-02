@@ -76,10 +76,23 @@ export const useAuthStore = create<AuthState>()(
           console.error('❌ Login error:', {
             status: error.response?.status,
             data: error.response?.data,
-            message: error.message
+            message: error.message,
+            url: `${API_BASE_URL}/api/auth/login`,
+            config: error.config
           });
+          
+          // より詳細なエラーメッセージ
+          let errorMessage = 'ログインに失敗しました';
+          if (error.response?.status === 401) {
+            errorMessage = 'ユーザー名またはパスワードが正しくありません';
+          } else if (error.response?.status === 500) {
+            errorMessage = 'サーバーエラーが発生しました';
+          } else if (!error.response) {
+            errorMessage = 'ネットワークエラー: サーバーに接続できません';
+          }
+          
           throw new Error(
-            error.response?.data?.detail || 'ログインに失敗しました'
+            error.response?.data?.detail || errorMessage
           );
         }
       },

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Production Login Test</title>
+</head>
+<body>
+    <h1>프로덕션 로그인 테스트</h1>
+    <button onclick="testLogin()">로그인 테스트</button>
+    <div id="result"></div>
+    
+    <script>
+        async function testLogin() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p>테스트 중...</p>';
+            
+            try {
+                // FormData로 전송
+                const formData = new URLSearchParams();
+                formData.append('username', 'admin');
+                formData.append('password', 'admin123');
+                
+                console.log('Sending login request...');
+                
+                const response = await fetch('https://video-accounting-app.onrender.com/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                console.log('Response:', data);
+                
+                if (response.ok) {
+                    // 사용자 정보 가져오기
+                    const userResponse = await fetch('https://video-accounting-app.onrender.com/api/auth/me', {
+                        headers: {
+                            'Authorization': `Bearer ${data.access_token}`
+                        }
+                    });
+                    
+                    const userData = await userResponse.json();
+                    
+                    resultDiv.innerHTML = `
+                        <h2 style="color: green;">✅ 로그인 성공!</h2>
+                        <h3>토큰 정보:</h3>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                        <h3>사용자 정보:</h3>
+                        <pre>${JSON.stringify(userData, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <h2 style="color: red;">❌ 로그인 실패</h2>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = `
+                    <h2 style="color: red;">❌ 에러 발생</h2>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        }
+        
+        // 페이지 로드 시 자동 테스트
+        window.onload = () => {
+            console.log('Testing production login API...');
+        };
+    </script>
+</body>
+</html>
