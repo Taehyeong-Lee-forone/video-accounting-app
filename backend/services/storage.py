@@ -15,9 +15,11 @@ class StorageService:
     """クラウドストレージ統合サービス"""
     
     def __init__(self):
-        self.storage_type = os.getenv("STORAGE_TYPE", "supabase")  # supabase, s3, gcs
+        self.storage_type = os.getenv("STORAGE_TYPE", "cloudinary")  # cloudinary, supabase, s3, gcs
         
-        if self.storage_type == "supabase":
+        if self.storage_type == "cloudinary":
+            self._init_cloudinary()
+        elif self.storage_type == "supabase":
             self._init_supabase()
         elif self.storage_type == "s3":
             self._init_s3()
@@ -25,6 +27,14 @@ class StorageService:
             self._init_gcs()
         else:
             raise ValueError(f"Unsupported storage type: {self.storage_type}")
+    
+    def _init_cloudinary(self):
+        """Cloudinary初期化"""
+        from services.cloudinary_storage import cloudinary_storage
+        
+        self.cloudinary = cloudinary_storage
+        if not self.cloudinary.configured:
+            logger.warning("Cloudinary is not properly configured")
     
     def _init_supabase(self):
         """Supabase Storage初期化"""
@@ -88,7 +98,9 @@ class StorageService:
             (success: bool, url_or_error: str)
         """
         try:
-            if self.storage_type == "supabase":
+            if self.storage_type == "cloudinary":
+                return await self._upload_cloudinary(file_content, file_path, content_type)
+            elif self.storage_type == "supabase":
                 return await self._upload_supabase(file_content, file_path, content_type)
             elif self.storage_type == "s3":
                 return await self._upload_s3(file_content, file_path, content_type)
@@ -106,7 +118,9 @@ class StorageService:
             (success: bool, url_or_error: str)
         """
         try:
-            if self.storage_type == "supabase":
+            if self.storage_type == "cloudinary":
+                return self._upload_cloudinary_sync(file_content, file_path, content_type)
+            elif self.storage_type == "supabase":
                 return self._upload_supabase_sync(file_content, file_path, content_type)
             elif self.storage_type == "s3":
                 return self._upload_s3_sync(file_content, file_path, content_type)
@@ -115,6 +129,33 @@ class StorageService:
         except Exception as e:
             logger.error(f"Upload failed: {e}")
             return False, str(e)
+    
+    def _upload_cloudinary_sync(self, file_content: bytes, file_path: str, content_type: str) -> Tuple[bool, str]:
+        """Cloudinaryに同期アップロード"""
+        try:
+            # ファイル名から拡張子を取得
+            filename = os.path.basename(file_path)
+            
+            # Cloudinaryにアップロード
+            success, result = self.cloudinary.upload_video_from_bytes(
+                file_bytes=file_content,
+                filename=filename,
+                public_id=file_path.replace("/", "_").replace(".", "_")  # スラッシュとドットを変換
+            )
+            
+            if success:
+                logger.info(f"Uploaded to Cloudinary: {result['public_id']}")
+                return True, result['secure_url']
+            else:
+                return False, result.get('error', 'Unknown error')
+        except Exception as e:
+            logger.error(f"Cloudinary sync upload error: {e}")
+            return False, str(e)
+    
+    async def _upload_cloudinary(self, file_content: bytes, file_path: str, content_type: str) -> Tuple[bool, str]:
+        """Cloudinaryにアップロード（非同期）"""
+        # Cloudinaryは同期APIなので、同期版を呼び出す
+        return self._upload_cloudinary_sync(file_content, file_path, content_type)
     
     def _upload_supabase_sync(self, file_content: bytes, file_path: str, content_type: str) -> Tuple[bool, str]:
         """Supabase Storageに同期アップロード"""
@@ -245,7 +286,9 @@ class StorageService:
         クラウドストレージからファイルをダウンロード
         """
         try:
-            if self.storage_type == "supabase":
+            if self.storage_type == "cloudinary":
+                return await self._download_cloudinary(file_path)
+            elif self.storage_type == "supabase":
                 return await self._download_supabase(file_path)
             elif self.storage_type == "s3":
                 return await self._download_s3(file_path)
@@ -253,6 +296,26 @@ class StorageService:
                 return await self._download_gcs(file_path)
         except Exception as e:
             logger.error(f"Download failed: {e}")
+            return None
+    
+    async def _download_cloudinary(self, file_path: str) -> Optional[bytes]:
+        """Cloudinaryからダウンロード"""
+        try:
+            # CloudinaryはURLベースなので、ダウンロードは通常不要
+            # URLを返すだけでストリーミング可能
+            public_id = file_path.replace("/", "_").replace(".", "_")
+            url = self.cloudinary.get_video_url(public_id)
+            
+            if url:
+                # URLからダウンロード
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as response:
+                        if response.status == 200:
+                            return await response.read()
+            return None
+        except Exception as e:
+            logger.error(f"Cloudinary download error: {e}")
             return None
     
     async def _download_supabase(self, file_path: str) -> Optional[bytes]:
@@ -287,7 +350,10 @@ class StorageService:
         クラウドストレージからファイルを削除
         """
         try:
-            if self.storage_type == "supabase":
+            if self.storage_type == "cloudinary":
+                public_id = file_path.replace("/", "_").replace(".", "_")
+                return self.cloudinary.delete_video(public_id)
+            elif self.storage_type == "supabase":
                 self.client.storage.from_(self.bucket_name).remove([file_path])
             elif self.storage_type == "s3":
                 self.s3_client.delete_object(Bucket=self.bucket_name, Key=file_path)
@@ -305,7 +371,10 @@ class StorageService:
         """
         ファイルの公開URLを取得（既存ファイル用）
         """
-        if self.storage_type == "supabase":
+        if self.storage_type == "cloudinary":
+            public_id = file_path.replace("/", "_").replace(".", "_")
+            return self.cloudinary.get_video_url(public_id)
+        elif self.storage_type == "supabase":
             return self.client.storage.from_(self.bucket_name).get_public_url(file_path)
         elif self.storage_type == "s3":
             return f"https://{self.bucket_name}.s3.amazonaws.com/{file_path}"
