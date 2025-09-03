@@ -15,7 +15,7 @@ class StorageService:
     """クラウドストレージ統合サービス"""
     
     def __init__(self):
-        self.storage_type = os.getenv("STORAGE_TYPE", "cloudinary")  # cloudinary, supabase, s3, gcs
+        self.storage_type = os.getenv("STORAGE_TYPE", "supabase")  # supabase, cloudinary, s3, gcs
         
         if self.storage_type == "cloudinary":
             self._init_cloudinary()
