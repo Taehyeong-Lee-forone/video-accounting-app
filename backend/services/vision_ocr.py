@@ -597,13 +597,16 @@ class VisionOCRService:
                 if parsed_date:
                     receipt_data['issue_date'] = parsed_date
                 else:
-                    # パース失敗時は文字列をそのまま使用
+                    # パース失敗時は文字列をそのまま使用（今日の日付は使わない）
                     try:
                         receipt_data['issue_date'] = datetime.strptime(
                             receipt_data['issue_date'], '%Y-%m-%d'
                         )
                     except:
-                        receipt_data['issue_date'] = datetime.now()
+                        # 日付が解析できない場合は文字列のまま保持
+                        # datetime.now()は使わない（今日の日付になってしまうため）
+                        logger.warning(f"Could not parse date: {receipt_data.get('issue_date')}, keeping as string")
+                        pass  # issue_dateは文字列のまま
             
             # Simple normalization for document type
             doc_type = receipt_data.get('document_type', 'レシート')
@@ -628,7 +631,7 @@ class VisionOCRService:
             return {
                 "vendor": final_vendor,
                 "document_type": doc_type,
-                "issue_date": receipt_data.get('issue_date', datetime.now()),
+                "issue_date": receipt_data.get('issue_date', None),  # 日付が無い場合はNone（今日の日付は使わない）
                 "currency": "JPY",
                 "total": receipt_data.get('total', 0),
                 "subtotal": receipt_data.get('subtotal', 0),
@@ -646,7 +649,7 @@ class VisionOCRService:
             return {
                 "vendor": "OCR Failed",
                 "document_type": "レシート",
-                "issue_date": datetime.now(),
+                "issue_date": None,  # エラー時も今日の日付は使わない
                 "currency": "JPY",
                 "total": 0,
                 "subtotal": 0,

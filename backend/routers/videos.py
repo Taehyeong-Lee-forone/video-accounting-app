@@ -450,9 +450,12 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
                             try:
                                 issue_date = datetime.strptime(issue_date, '%Y-%m-%d')
                             except:
-                                issue_date = datetime.now()
+                                # 日付解析失敗時はNone（今日の日付は使わない）
+                                issue_date = None
+                                logger.warning(f"Could not parse date, setting to None")
                         elif not issue_date:
-                            issue_date = datetime.now()
+                            # 日付がない場合もNone
+                            issue_date = None
                         
                         # レシートを保存
                         total_amount = receipt_info.get('total', 0) or 0
@@ -777,11 +780,14 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
                             issue_date_value = datetime.strptime(issue_date_value, '%Y-%m-%d')
                         except ValueError:
                             logger.warning(f"Invalid date format: {issue_date_value}, using current date")
-                            issue_date_value = datetime.now()
+                            issue_date_value = None  # 今日の日付は使わない
                     elif not isinstance(issue_date_value, datetime):
-                        issue_date_value = datetime.now()
+                        # datetime型でない場合は文字列として保持またはNone
+                        if not issue_date_value:
+                            issue_date_value = None
                 else:
-                    issue_date_value = datetime.now()
+                    # 日付がない場合はNone
+                    issue_date_value = None
                 
                 # Final safety check for composite document types
                 doc_type = receipt_data.get('document_type')
@@ -1403,11 +1409,15 @@ async def analyze_frame_at_time(
                     try:
                         issue_date_value = datetime.strptime(issue_date_value, '%Y-%m-%d')
                     except ValueError:
-                        issue_date_value = datetime.now()
+                        # datetime型でない場合は文字列として保持またはNone
+                        if not issue_date_value:
+                            issue_date_value = None
                 elif not isinstance(issue_date_value, datetime):
-                    issue_date_value = datetime.now()
+                    # 日付がない場合はNone
+                    issue_date_value = None
             else:
-                issue_date_value = datetime.now()
+                # 日付がない場合はNone
+                issue_date_value = None
             
             # 手動追加は重複チェックなしで常に新しいレシートを生成
             # タイムスタンプを追加してUNIQUE制約を回避
@@ -2319,9 +2329,12 @@ def process_video_ocr_sync(video_id: int, db: Session):
                             try:
                                 issue_date = datetime.strptime(issue_date, '%Y-%m-%d')
                             except:
-                                issue_date = datetime.now()
+                                # 日付解析失敗時はNone（今日の日付は使わない）
+                                issue_date = None
+                                logger.warning(f"Could not parse date, setting to None")
                         elif not issue_date:
-                            issue_date = datetime.now()
+                            # 日付がない場合もNone
+                            issue_date = None
                         
                         # Receipt作成（正しいフィールド名を使用）
                         try:
