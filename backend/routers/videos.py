@@ -1839,7 +1839,8 @@ async def delete_video(
 
 def extract_receipt_info_from_text(ocr_text: str) -> Optional[Dict[str, Any]]:
     """
-    OCRテキストから領収書情報を抽出（簡易版）
+    OCRテキストから領収書情報を抽出（改善版）
+    発行元と宛名を正しく区別し、日付の精度を向上
     """
     import re
     from datetime import datetime
@@ -1849,14 +1850,41 @@ def extract_receipt_info_from_text(ocr_text: str) -> Optional[Dict[str, Any]]:
     
     receipt_info = {}
     
-    # 店舗名を検出（最初の行や「様」「御中」の前など）
+    # 改善版：発行元（店舗名）を正しく検出
     lines = ocr_text.split('\n')
-    for line in lines[:5]:  # 最初の5行をチェック
+    vendor_found = False
+    
+    # 宛名パターン（これらは除外）
+    recipient_patterns = [r'様$', r'御中$', r'^\s*お客様', r'^\s*宛名']
+    
+    for i, line in enumerate(lines[:10]):  # 最初の10行をチェック
         line = line.strip()
-        if line and len(line) > 2 and not re.match(r'^[\d\s\-\/]+$', line):
-            # 数字だけの行でなければ店舗名候補
-            receipt_info['vendor'] = line[:50]  # 最大50文字
+        if not line or len(line) < 2:
+            continue
+        
+        # 宛名行は除外
+        is_recipient = any(re.search(pattern, line) for pattern in recipient_patterns)
+        if is_recipient:
+            continue
+        
+        # 住所や電話番号の前の行は店舗名の可能性が高い
+        if i < len(lines) - 1:
+            next_line = lines[i + 1].strip()
+            if re.search(r'〒?\d{3}-?\d{4}|TEL|電話|☎', next_line):
+                receipt_info['vendor'] = line[:50]
+                vendor_found = True
+                break
+        
+        # 店舗名パターンにマッチ
+        if re.search(r'(店|ストア|マート|スーパー|センター|株式会社|有限会社|\(株\)|㈱)$', line):
+            receipt_info['vendor'] = line[:50]
+            vendor_found = True
             break
+        
+        # 最初の有効な行を暫定的に店舗名とする（数字のみの行は除外）
+        if not vendor_found and not re.match(r'^[\d\s\-\/\.:]+$', line):
+            receipt_info['vendor'] = line[:50]
+            vendor_found = True  # 続けて探す
     
     # 合計金額を検出
     total_patterns = [
@@ -1879,33 +1907,61 @@ def extract_receipt_info_from_text(ocr_text: str) -> Optional[Dict[str, Any]]:
             except:
                 continue
     
-    # 日付を検出
+    # 改善版：日付を正確に検出（このフレームの日付のみ）
     date_patterns = [
-        r'(\d{4})[年\-\/](\d{1,2})[月\-\/](\d{1,2})',
-        r'(\d{2})[年\-\/](\d{1,2})[月\-\/](\d{1,2})',
-        r'(\d{1,2})[月\/](\d{1,2})[日\/]'
+        # 完全な日付形式を優先
+        (r'(\d{4})[年\-\/](\d{1,2})[月\-\/](\d{1,2})[日]?', 'full'),
+        (r'令和(\d{1,2})年(\d{1,2})月(\d{1,2})日', 'reiwa'),
+        (r'R(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{1,2})', 'reiwa_short'),
+        (r'平成(\d{1,2})年(\d{1,2})月(\d{1,2})日', 'heisei'),
+        (r'H(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{1,2})', 'heisei_short'),
+        (r'(\d{2})[年\-\/](\d{1,2})[月\-\/](\d{1,2})', 'short_year'),
+        (r'(\d{1,2})[月\/](\d{1,2})[日]?', 'month_day'),
     ]
     
-    for pattern in date_patterns:
-        match = re.search(pattern, ocr_text)
-        if match:
-            try:
-                if len(match.groups()) == 3:
-                    year = int(match.group(1))
-                    if year < 100:
-                        year += 2000
-                    month = int(match.group(2))
-                    day = int(match.group(3))
-                    receipt_info['date'] = f"{year:04d}-{month:02d}-{day:02d}"
-                elif len(match.groups()) == 2:
-                    # 年がない場合は現在年を使用
-                    year = datetime.now().year
-                    month = int(match.group(1))
-                    day = int(match.group(2))
-                    receipt_info['date'] = f"{year:04d}-{month:02d}-{day:02d}"
-                break
-            except:
-                continue
+    # 日付キーワード近くの日付を優先
+    date_keywords = ['日付', '発行日', 'Date', '年月日', '取引日']
+    found_dates = []
+    
+    for i, line in enumerate(lines[:20]):  # 最初の20行のみチェック
+        line = line.strip()
+        priority = 2 if any(kw in line for kw in date_keywords) else 1
+        if i < 5:  # 上部の日付は優先度高
+            priority += 1
+        
+        for pattern, date_type in date_patterns:
+            matches = re.finditer(pattern, line)
+            for match in matches:
+                try:
+                    if date_type == 'full':
+                        year, month, day = int(match.group(1)), int(match.group(2)), int(match.group(3))
+                    elif date_type == 'reiwa':
+                        year, month, day = 2018 + int(match.group(1)), int(match.group(2)), int(match.group(3))
+                    elif date_type == 'reiwa_short':
+                        year, month, day = 2018 + int(match.group(1)), int(match.group(2)), int(match.group(3))
+                    elif date_type == 'heisei':
+                        year, month, day = 1988 + int(match.group(1)), int(match.group(2)), int(match.group(3))
+                    elif date_type == 'heisei_short':
+                        year, month, day = 1988 + int(match.group(1)), int(match.group(2)), int(match.group(3))
+                    elif date_type == 'short_year':
+                        year = 2000 + int(match.group(1))
+                        month, day = int(match.group(2)), int(match.group(3))
+                    elif date_type == 'month_day':
+                        year = datetime.now().year
+                        month, day = int(match.group(1)), int(match.group(2))
+                    else:
+                        continue
+                    
+                    # 妥当性チェック
+                    if 2020 <= year <= 2030 and 1 <= month <= 12 and 1 <= day <= 31:
+                        found_dates.append((priority, i, f"{year:04d}-{month:02d}-{day:02d}"))
+                except:
+                    continue
+    
+    # 最も優先度の高い日付を選択
+    if found_dates:
+        found_dates.sort(key=lambda x: (-x[0], x[1]))  # 優先度高、行番号小を優先
+        receipt_info['date'] = found_dates[0][2]
     
     # 最低限の情報があれば返す
     if receipt_info.get('vendor') or receipt_info.get('total'):
