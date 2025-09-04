@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/authStore'
 
 const navigation = [
   { name: 'ホーム', href: '/', icon: HomeIcon },
-  { name: 'アプリ', href: '/app', icon: PlayIcon },
+  { name: 'アップロード', href: '/upload', icon: PlayIcon },
   { name: '設定', href: '/settings', icon: CogIcon },
 ]
 
@@ -75,7 +75,7 @@ export default function Navigation() {
               </Link>
             )}
             <Link
-              href="/app"
+              href="/upload"
               className="ml-4 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
             >
               始める

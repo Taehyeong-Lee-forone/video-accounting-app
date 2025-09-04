@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 
 // 認証が必要なパス
-const PROTECTED_PATHS = ['/app', '/settings'];
+const PROTECTED_PATHS = ['/upload', '/settings'];
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -45,7 +45,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     if (!isHydrated) return;
     
     if (pathname === '/login' && isAuthenticated) {
-      router.push('/app');
+      router.push('/upload');
     }
   }, [isHydrated, isAuthenticated, pathname, router]);
 

@@ -63,7 +63,7 @@ export default function Home() {
             
             <div className="mt-10 flex items-center justify-center">
               <Link
-                href="/app"
+                href="/upload"
                 className="group inline-flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors"
               >
                 無料で始める
@@ -203,7 +203,7 @@ export default function Home() {
             クレジットカード不要・無料でお試しいただけます
           </p>
           <Link
-            href="/app"
+            href="/upload"
             className="inline-flex items-center gap-2 px-8 py-4 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors"
           >
             無料で始める

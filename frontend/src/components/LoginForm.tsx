@@ -45,7 +45,7 @@ export default function LoginForm() {
       }
       
       toast.success('ログインしました');
-      router.push('/');
+      router.push('/upload');
     } catch (error: any) {
       toast.error(error.message || 'ログインに失敗しました');
     } finally {
