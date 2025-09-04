@@ -208,8 +208,24 @@ class VisionOCRService:
         return receipt_data
     
     def _extract_vendor(self, text: str) -> Optional[str]:
-        """販売者/店名抽出"""
+        """販売者/店名抽出 - 改善版（発行元と宛名を区別）"""
         lines = text.split('\n')
+        
+        # 宛名パターン（これらは発行元ではない）
+        recipient_patterns = [
+            r'様$',
+            r'御中$',
+            r'^\s*お客様',
+            r'^\s*宛名',
+            r'^\s*To:',
+            r'^\s*あて名'
+        ]
+        
+        # 発行元の手がかりとなるキーワード
+        vendor_indicators = [
+            '住所', '〒', 'TEL', '電話', '☎',  # 住所・電話が近くにある
+            '発行', '店舗', '営業',  # 発行元情報
+        ]
         
         # 除外すべきキーワード（基本的なもののみ）
         exclude_keywords = [
@@ -236,58 +252,55 @@ class VisionOCRService:
         # 優先順位リスト（高い順）
         candidates = []
         
-        # Priority 1: "様"が含まれる行（最優先）
-        for i, line in enumerate(lines[:10]):
-            if '様' in line:
-                cleaned = line.strip()
-                
-                # 「様」だけの行の場合、前の行と結合
-                if cleaned == '様' and i > 0:
-                    prev_line = lines[i-1].strip()
-                    if prev_line and len(prev_line) <= 20:
-                        # 名前として妥当そうなもの
-                        vendor_name = prev_line + '様'
-                        candidates.append((1, vendor_name))
-                
-                # 「様」が行内にある場合
-                elif '様' in cleaned and cleaned != '様':
-                    # 様の前の部分を取得
-                    sama_index = cleaned.index('様')
-                    vendor_base = cleaned[:sama_index].strip()
-                    if vendor_base:
-                        vendor_name = vendor_base + '様'
-                        # 除外キーワードが含まれていないもの優先
-                        if not any(kw in vendor_name for kw in exclude_keywords):
-                            candidates.append((1, vendor_name))
-                        else:
-                            candidates.append((2, vendor_name))
-        
-        # Priority 2: 会社名パターン
-        for line in lines[:8]:
-            if any(keyword in line for keyword in ['株式会社', '有限会社', '合同会社', '(株)', '㈱']):
-                cleaned = line.strip()
-                if not any(keyword in cleaned for keyword in exclude_keywords):
-                    candidates.append((3, cleaned))
-        
-        # Priority 3: 店舗名パターン
-        for line in lines[:8]:
-            if any(keyword in line for keyword in ['店', 'ストア', 'マート', 'スーパー', '商店']):
-                cleaned = line.strip()
-                if not any(keyword in cleaned for keyword in exclude_keywords):
-                    candidates.append((4, cleaned))
-        
-        # Priority 4: その他の有効な行（フォールバック）
-        for line in lines[:10]:
+        # 各行を解析
+        for i, line in enumerate(lines[:15]):  # 最初の15行を優先的にチェック
             cleaned = line.strip()
-            if cleaned and len(cleaned) > 2:
-                # 基本的な除外キーワードチェック
-                if not any(keyword in cleaned for keyword in exclude_keywords):
-                    # 数字だけの行も除外
-                    if not cleaned.replace(' ', '').replace('-', '').replace('/', '').isdigit():
-                        # 数字が70%以上を占める場合も除外
-                        digit_count = sum(c.isdigit() for c in cleaned)
-                        if len(cleaned) > 0 and digit_count / len(cleaned) < 0.7:
-                            candidates.append((5, cleaned))
+            if not cleaned or len(cleaned) < 2:
+                continue
+            
+            # 宛名パターンチェック（これらは除外）
+            is_recipient = False
+            for pattern in recipient_patterns:
+                if re.search(pattern, cleaned, re.IGNORECASE):
+                    is_recipient = True
+                    logger.debug(f"Skipping recipient line: {cleaned}")
+                    break
+            
+            if is_recipient:
+                continue  # 宛名は発行元ではないのでスキップ
+            
+            # Priority 1: 住所・電話番号の近くにある店舗名（上下2行をチェック）
+            priority_boost = 0
+            if i > 0:
+                prev_line = lines[i-1] if i > 0 else ""
+                if any(indicator in prev_line for indicator in vendor_indicators):
+                    priority_boost = 10
+            if i < len(lines) - 1:
+                next_line = lines[i+1]
+                if any(indicator in next_line for indicator in vendor_indicators):
+                    priority_boost = 10
+            
+            # Priority 2: 会社名パターン（発行元の可能性高）
+            if any(keyword in cleaned for keyword in ['株式会社', '有限会社', '合同会社', '(株)', '㈱']):
+                if not any(kw in cleaned for kw in exclude_keywords):
+                    candidates.append((3 - priority_boost, cleaned))
+            
+            # Priority 3: 店舗名パターン（発行元の可能性高）
+            elif any(keyword in cleaned for keyword in ['店', 'ストア', 'マート', 'スーパー', '商店', 'センター']):
+                if not any(kw in cleaned for kw in exclude_keywords):
+                    candidates.append((4 - priority_boost, cleaned))
+            
+            # Priority 4: チェーン店名パターン
+            elif any(chain in cleaned for chain in ['セブンイレブン', 'ファミリーマート', 'ローソン', 'イオン', 'ダイソー']):
+                candidates.append((2, cleaned))
+            
+            # Priority 5: 上部の大きなテキスト（ロゴ等の可能性）
+            elif i < 5 and not any(kw in cleaned for kw in exclude_keywords):
+                # 数字だけでない、有効な文字列
+                if not cleaned.replace(' ', '').replace('-', '').replace('/', '').isdigit():
+                    digit_count = sum(c.isdigit() for c in cleaned)
+                    if len(cleaned) > 0 and digit_count / len(cleaned) < 0.5:
+                        candidates.append((6 - priority_boost, cleaned))
         
         # 優先順位でソートして最初のものを返す
         if candidates:
@@ -362,13 +375,47 @@ class VisionOCRService:
         return self._extract_amount(text, patterns['total'])
     
     def _extract_date(self, text: str, patterns: list) -> Optional[str]:
-        """日付抽出（日本の元号含む）"""
-        for pattern in patterns:
-            matches = re.findall(pattern, text)
-            if matches:
-                date_str = matches[0]
-                # 日本の元号はそのまま返す（別途処理必要）
-                return date_str
+        """日付抽出 - 改善版（現在のフレームのみ、優先度ベース）"""
+        lines = text.split('\n')
+        date_candidates = []  # (priority, line_index, date_string)
+        
+        # 日付キーワード（これらの近くにある日付を優先）
+        date_keywords = ['日付', '発行日', 'Date', '年月日', '取引日', '購入日', 'レシート']
+        
+        for i, line in enumerate(lines[:20]):  # 最初の20行のみチェック
+            # 日付キーワードが含まれる行は優先度高
+            priority = 10 if any(kw in line for kw in date_keywords) else 5
+            
+            # 上部（最初の5行）の日付は優先度高
+            if i < 5:
+                priority += 3
+            
+            # レジ番号や時刻の近くも優先
+            if 'レジ' in line or '時' in line or ':' in line:
+                priority += 2
+            
+            for pattern in patterns:
+                matches = re.findall(pattern, line)
+                for match in matches:
+                    # 日付文字列を取得
+                    date_str = match if isinstance(match, str) else match[0]
+                    
+                    # 妥当性チェック（2020年〜2030年の範囲）
+                    year_check = re.search(r'20[2-3]\d', date_str)
+                    reiwa_check = re.search(r'令和[1-9]', date_str)
+                    
+                    if year_check or reiwa_check or i < 10:  # 上部10行は年がなくても許容
+                        date_candidates.append((priority, i, date_str))
+                        logger.debug(f"Date candidate found: {date_str} (priority={priority}, line={i})")
+        
+        # 最も優先度の高い日付を選択
+        if date_candidates:
+            # 優先度（高い方が良い）、行番号（小さい方が良い）でソート
+            date_candidates.sort(key=lambda x: (-x[0], x[1]))
+            selected_date = date_candidates[0][2]
+            logger.info(f"Selected date: {selected_date} from {len(date_candidates)} candidates")
+            return selected_date
+        
         return None
     
     def _detect_payment_method(self, text: str) -> str:
