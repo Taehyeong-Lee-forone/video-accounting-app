@@ -153,6 +153,7 @@ class VisionOCRService:
                 r'税[：:\s]*([¥￥]?[\d,]+)円?'  # 最後の手段
             ],
             'date': [
+                # 完全な日付形式（優先）
                 r'(令和\d+年\d{1,2}月\d{1,2}日)',  # 令和6年12月25日
                 r'(令和元年\d{1,2}月\d{1,2}日)',    # 令和元年
                 r'(平成\d+年\d{1,2}月\d{1,2}日)',  # 平成31年4月30日
@@ -160,8 +161,9 @@ class VisionOCRService:
                 r'(H\d+[\.\/\-]\d{1,2}[\.\/\-]\d{1,2})',  # H31.4.30
                 r'(\d{4}[年/\-]\d{1,2}[月/\-]\d{1,2}[日]?)',  # 2024年12月25日, 2024/12/25
                 r'(\d{4}-\d{2}-\d{2})',            # 2024-12-25
-                r'(\d{2}/\d{2}/\d{2})',            # 24/12/25
-                r'(\d{8})',                        # 20241225
+                r'(20\d{2}\d{2}\d{2})',            # 20241225（年が明確な8桁のみ）
+                # 省略形式（令和を仮定）
+                r'(\d{1}年\d{1,2}月\d{1,2}日)',    # 6年11月26日 → 令和6年として解釈
             ]
         }
         
@@ -375,47 +377,101 @@ class VisionOCRService:
         return self._extract_amount(text, patterns['total'])
     
     def _extract_date(self, text: str, patterns: list) -> Optional[str]:
-        """日付抽出 - 改善版（現在のフレームのみ、優先度ベース）"""
+        """日付抽出 - 改善版（厳格な日付検証と省略形式対応）"""
         lines = text.split('\n')
-        date_candidates = []  # (priority, line_index, date_string)
+        date_candidates = []  # (priority, line_index, date_string, normalized_date)
         
         # 日付キーワード（これらの近くにある日付を優先）
-        date_keywords = ['日付', '発行日', 'Date', '年月日', '取引日', '購入日', 'レシート']
+        date_keywords = ['日付', '発行日', 'Date', '年月日', '取引日', '購入日', 'レシート', '日時']
         
-        for i, line in enumerate(lines[:20]):  # 最初の20行のみチェック
+        # 現在の年（令和の計算用）
+        from datetime import datetime
+        current_year = datetime.now().year
+        current_reiwa = current_year - 2018  # 令和元年 = 2019
+        
+        for i, line in enumerate(lines[:25]):  # 最初の25行をチェック
             # 日付キーワードが含まれる行は優先度高
-            priority = 10 if any(kw in line for kw in date_keywords) else 5
+            has_keyword = any(kw in line for kw in date_keywords)
+            priority = 20 if has_keyword else 10
             
-            # 上部（最初の5行）の日付は優先度高
-            if i < 5:
-                priority += 3
+            # 上部（最初の7行）の日付は優先度高
+            if i < 7:
+                priority += 5
             
             # レジ番号や時刻の近くも優先
-            if 'レジ' in line or '時' in line or ':' in line:
-                priority += 2
+            if any(kw in line for kw in ['レジ', '時', ':', 'No.', '#']):
+                priority += 3
             
-            for pattern in patterns:
+            for pattern_idx, pattern in enumerate(patterns):
                 matches = re.findall(pattern, line)
                 for match in matches:
                     # 日付文字列を取得
                     date_str = match if isinstance(match, str) else match[0]
+                    normalized_date = None
                     
-                    # 妥当性チェック（2020年〜2030年の範囲）
-                    year_check = re.search(r'20[2-3]\d', date_str)
-                    reiwa_check = re.search(r'令和[1-9]', date_str)
+                    # パターンごとの日付正規化と優先度調整
+                    if '令和' in date_str:
+                        # 令和の日付はそのまま使用
+                        normalized_date = date_str
+                        priority += 15  # 元号付きは信頼度最高
+                    elif '平成' in date_str:
+                        # 平成の日付もそのまま使用
+                        normalized_date = date_str
+                        priority += 15
+                    elif 'R' in date_str and re.match(r'R\d+', date_str):
+                        # R6.12.25形式
+                        normalized_date = date_str
+                        priority += 12
+                    elif 'H' in date_str and re.match(r'H\d+', date_str):
+                        # H31.4.30形式
+                        normalized_date = date_str
+                        priority += 12
+                    elif re.match(r'\d{4}[年/-]', date_str):
+                        # 西暦を含む形式
+                        year_match = re.search(r'(20\d{2})', date_str)
+                        if year_match:
+                            year = int(year_match.group(1))
+                            # 2020-2025年の範囲のみ許可（現実的な範囲）
+                            if 2020 <= year <= 2025:
+                                normalized_date = date_str
+                                priority += 10
+                    elif re.match(r'\d{1}年\d{1,2}月\d{1,2}日', date_str):
+                        # 「6年11月26日」のような省略形式を令和として解釈
+                        m = re.match(r'(\d{1})年(\d{1,2})月(\d{1,2})日', date_str)
+                        if m:
+                            year_digit = int(m.group(1))
+                            month = int(m.group(2))
+                            day = int(m.group(3))
+                            # 令和の年として解釈（6年 = 令和6年）
+                            if 1 <= year_digit <= current_reiwa and 1 <= month <= 12 and 1 <= day <= 31:
+                                # 令和形式に変換して保存
+                                normalized_date = f"令和{year_digit}年{month}月{day}日"
+                                priority += 8  # 省略形式は中程度の信頼度
+                                logger.info(f"Converted abbreviated date: {date_str} -> {normalized_date}")
+                    elif re.match(r'20\d{6}', date_str):
+                        # 20241225形式（8桁の数字）
+                        year = int(date_str[0:4])
+                        month = int(date_str[4:6])
+                        day = int(date_str[6:8])
+                        if 2020 <= year <= 2025 and 1 <= month <= 12 and 1 <= day <= 31:
+                            normalized_date = date_str
+                            priority += 7
                     
-                    if year_check or reiwa_check or i < 10:  # 上部10行は年がなくても許容
-                        date_candidates.append((priority, i, date_str))
-                        logger.debug(f"Date candidate found: {date_str} (priority={priority}, line={i})")
+                    # 有効な日付のみ候補に追加
+                    if normalized_date:
+                        date_candidates.append((priority, i, date_str, normalized_date))
+                        logger.debug(f"Valid date found: {normalized_date} (original: {date_str}, priority={priority}, line={i})")
         
         # 最も優先度の高い日付を選択
         if date_candidates:
             # 優先度（高い方が良い）、行番号（小さい方が良い）でソート
             date_candidates.sort(key=lambda x: (-x[0], x[1]))
-            selected_date = date_candidates[0][2]
-            logger.info(f"Selected date: {selected_date} from {len(date_candidates)} candidates")
-            return selected_date
+            selected = date_candidates[0]
+            logger.info(f"Selected date: {selected[3]} (original: {selected[2]}) from {len(date_candidates)} candidates")
+            # 元の形式を返す（正規化された形式ではなく、OCRで読み取った原文）
+            return selected[2]
         
+        logger.warning("No valid date found in the text")
         return None
     
     def _detect_payment_method(self, text: str) -> str:
