@@ -72,7 +72,12 @@ export default function VideoUpload({ onUploadSuccess }: VideoUploadProps) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'video/*': ['.mp4', '.mov', '.avi'],
+      'video/*': ['.mp4', '.mov', '.avi', '.webm', '.mkv'],
+      'video/quicktime': ['.mov', '.qt'],  // QuickTime専用
+      'video/mp4': ['.mp4', '.m4v'],
+      'video/x-msvideo': ['.avi'],
+      'video/webm': ['.webm'],
+      'video/x-matroska': ['.mkv']
     },
     maxFiles: 1,
     disabled: uploading,

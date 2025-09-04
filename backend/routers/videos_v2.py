@@ -39,8 +39,27 @@ async def upload_video_v2(
         if not file.filename:
             raise HTTPException(400, "ファイル名が空です")
         
-        if not file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.webm', '.mkv')):
-            raise HTTPException(400, "サポートされていないファイル形式です")
+        # ファイル拡張子とMIMEタイプをログ出力（デバッグ用）
+        logger.info(f"Uploaded file: {file.filename}, MIME type: {file.content_type}")
+        
+        # サポートされる拡張子リスト（大文字小文字を区別しない）
+        supported_extensions = ('.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v', '.qt')
+        if not file.filename.lower().endswith(supported_extensions):
+            raise HTTPException(400, f"サポートされていないファイル形式です。対応形式: {', '.join(supported_extensions)}")
+        
+        # MIMEタイプの検証（より柔軟に）
+        valid_mime_types = [
+            'video/mp4', 'video/quicktime', 'video/x-quicktime',  # MOV/QuickTime
+            'video/x-msvideo', 'video/avi',  # AVI
+            'video/webm', 'video/x-matroska',  # WebM/MKV
+            'application/octet-stream',  # ブラウザが判定できない場合
+            'video/x-m4v'  # M4V (Apple)
+        ]
+        
+        # MIMEタイプが設定されている場合のみチェック
+        if file.content_type and not any(mime in file.content_type.lower() for mime in valid_mime_types):
+            logger.warning(f"Unusual MIME type detected: {file.content_type} for file {file.filename}")
+            # 警告のみで、拒否しない（拡張子で判定済み）
         
         # 2. ファイルサイズチェック
         file_content = await file.read()
