@@ -203,11 +203,24 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   // 새로운 함수: 상세보기 모달 열기
   const handleOpenReceiptModal = (receipt: any) => {
     // 該当する領収書の仕訳データを検索
-    const relatedJournal = journals?.find((j: any) => j.receipt_id === receipt.id)
+    console.log('=== Receipt Modal Debug ===')
+    console.log('Receipt ID:', receipt.id, 'Type:', typeof receipt.id)
+    console.log('All journals:', journals)
+    console.log('Journals length:', journals?.length)
+    
+    // IDを数値に変換して比較
+    const receiptId = Number(receipt.id)
+    const relatedJournal = journals?.find((j: any) => {
+      const journalReceiptId = Number(j.receipt_id)
+      console.log(`Comparing: Journal receipt_id=${journalReceiptId} with Receipt id=${receiptId}`)
+      return journalReceiptId === receiptId
+    })
+    
+    console.log('Found journal:', relatedJournal)
     
     // モーダルを開く
     setModalReceipt(receipt)
-    setModalJournal(relatedJournal)
+    setModalJournal(relatedJournal || null)  // nullを明示的に設定
     setShowReceiptModal(true)
   }
 

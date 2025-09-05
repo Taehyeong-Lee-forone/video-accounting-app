@@ -66,7 +66,11 @@ class JournalGenerator:
         tax_amount, tax_account = self._calculate_tax(receipt)
         logger.info(f"Tax calculated: amount={tax_amount}, account={tax_account}")
         
-        if receipt.total:
+        # 金額が0でも仕訳を生成（プレースホルダーとして）
+        if receipt.total or receipt.total == 0:
+            # totalが0の場合は1円をプレースホルダーとして使用
+            amount = receipt.total if receipt.total > 0 else 1.0
+            
             # 1行で簡素化された仕訳
             entries.append(JournalEntryCreate(
                 receipt_id=receipt.id,
@@ -74,11 +78,11 @@ class JournalGenerator:
                 time_ms=self._get_frame_time(receipt),
                 debit_account=debit_account or self.default_accounts['expenses']['雑費'],
                 credit_account=credit_account or self.default_accounts['liabilities']['未払金'],
-                debit_amount=receipt.total,
-                credit_amount=receipt.total,
+                debit_amount=amount,
+                credit_amount=amount,
                 tax_account=tax_account if tax_amount > 0 else None,
                 tax_amount=tax_amount if tax_amount > 0 else None,
-                memo=receipt.vendor  # 簡単なメモのみ
+                memo=receipt.vendor or "未入力"  # 簡単なメモのみ
             ))
         
         return entries
