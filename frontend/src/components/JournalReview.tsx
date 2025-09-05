@@ -20,6 +20,15 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   const { data: video, isLoading: videoLoading, refetch: refetchVideo } = useVideoDetail(videoId)
   const { data: journals, isLoading: journalsLoading, refetch: refetchJournals } = useJournals(videoId)
   const [selectedJournal, setSelectedJournal] = useState<any>(null)
+  
+  // デバッグログ追加
+  useEffect(() => {
+    console.log('=== Journal Data Debug ===')
+    console.log('Video ID:', videoId)
+    console.log('Journals:', journals)
+    console.log('Journals loading:', journalsLoading)
+    console.log('Journals length:', journals?.length)
+  }, [journals, journalsLoading, videoId])
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null)
   const [playerReady, setPlayerReady] = useState(false)
   const [playing, setPlaying] = useState(false)  // デフォルトをfalseに（一時停止から開始）

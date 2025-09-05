@@ -50,17 +50,21 @@ class JournalGenerator:
     
     def generate_journal_entries(self, receipt: Receipt) -> List[JournalEntryCreate]:
         """領収書から仕訳を自動生成"""
+        logger.info(f"Starting journal generation for receipt {receipt.id}: vendor={receipt.vendor}, total={receipt.total}")
         entries = []
         
         # ベンダーマスタから勘定科目を取得
         vendor = self._get_vendor(receipt.vendor_norm)
+        logger.info(f"Found vendor master: {vendor.name if vendor else 'None'}")
         
         # 借方・貸方勘定の決定 (None を返さないように保証)
         debit_account = self._determine_debit_account(receipt, vendor) or self.default_accounts['expenses']['雑費']
         credit_account = self._determine_credit_account(receipt, vendor) or self.default_accounts['liabilities']['未払金']
+        logger.info(f"Accounts determined - debit: {debit_account}, credit: {credit_account}")
         
         # 税額計算
         tax_amount, tax_account = self._calculate_tax(receipt)
+        logger.info(f"Tax calculated: amount={tax_amount}, account={tax_account}")
         
         if receipt.total:
             # 1行で簡素化された仕訳

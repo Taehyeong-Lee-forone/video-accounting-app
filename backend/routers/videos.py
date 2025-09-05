@@ -486,10 +486,16 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
             update_progress(90, "仕訳データ生成中...")
             generator = JournalGenerator(db)
             receipts = db.query(Receipt).filter(Receipt.video_id == video.id).all()
+            logger.info(f"Found {len(receipts)} receipts for video {video.id}")
             
+            journal_count = 0
             for receipt in receipts:
+                logger.info(f"Generating journal entries for receipt {receipt.id} (vendor: {receipt.vendor}, total: {receipt.total})")
                 journal_entries = generator.generate_journal_entries(receipt)
+                logger.info(f"Generated {len(journal_entries)} journal entries for receipt {receipt.id}")
+                
                 for entry_data in journal_entries:
+                    journal_count += 1
                     journal_entry = JournalEntry(
                         receipt_id=entry_data.receipt_id,
                         video_id=entry_data.video_id,
@@ -506,7 +512,7 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
                     db.add(journal_entry)
             
             db.commit()
-            logger.info(f"Generated journal entries for {len(receipts)} receipts")
+            logger.info(f"Generated and saved {journal_count} journal entries for {len(receipts)} receipts")
             
             # 新システムで完了
             update_progress(100, "分析完了")

@@ -6,7 +6,9 @@ export function useJournals(videoId?: number) {
     queryKey: ['journals', videoId],
     queryFn: async () => {
       const params = videoId ? `?video_id=${videoId}` : ''
-      const response = await api.get(`/journals${params}`)
+      // トレーリングスラッシュを追加してリダイレクトを回避
+      const response = await api.get(`/journals/${params}`)
+      console.log('Journal API response:', response.data)
       return response.data
     },
     staleTime: 0, // データを即座に古いとみなす
