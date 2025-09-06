@@ -737,7 +737,9 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
         {/* 仕訳テーブル */}
         <div className="mt-6 bg-white rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">仕訳候補</h2>
-          {journals && journals.length > 0 ? (
+          {journalsLoading ? (
+            <p className="text-gray-500 text-center py-8">仕訳データを読み込み中...</p>
+          ) : journals && journals.length > 0 ? (
             <JournalTable
               journals={journals}
               onRowClick={handleJournalClick}
@@ -747,7 +749,12 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
               selectedId={selectedJournal?.id}
             />
           ) : (
-            <p className="text-gray-500 text-center py-8">仕訳データがありません</p>
+            <div className="text-center py-8">
+              <p className="text-gray-500">仕訳データがありません</p>
+              <p className="text-xs text-gray-400 mt-2">
+                Debug: journals={journals ? `Array(${journals.length})` : 'null/undefined'}
+              </p>
+            </div>
           )}
         </div>
       </div>
