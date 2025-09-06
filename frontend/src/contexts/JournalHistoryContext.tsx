@@ -31,17 +31,20 @@ const JournalHistoryContext = createContext<JournalHistoryContextType | undefine
 
 // ストレージキー
 const STORAGE_KEY = 'journal_history'
-const MAX_HISTORY_ITEMS = 10 // 最大履歴保存数
+const MAX_HISTORY_ITEMS = 20 // 最大履歴保存数（増やして永続化）
 
 export function JournalHistoryProvider({ children }: { children: ReactNode }) {
   const [history, setHistory] = useState<JournalHistoryItem[]>([])
   const [currentSession, setCurrentSession] = useState<JournalHistoryItem | null>(null)
 
-  // 初回ロード時にセッションストレージから履歴を復元
+  // 初回ロード時にローカルストレージから履歴を復元
   useEffect(() => {
+    // クライアントサイドでのみ実行
+    if (typeof window === 'undefined') return
+    
     const loadHistory = () => {
       try {
-        const stored = sessionStorage.getItem(STORAGE_KEY)
+        const stored = window.localStorage.getItem(STORAGE_KEY)
         if (stored) {
           const parsed = JSON.parse(stored)
           // Date型に変換
@@ -60,10 +63,13 @@ export function JournalHistoryProvider({ children }: { children: ReactNode }) {
     loadHistory()
   }, [])
 
-  // 履歴が変更されたらセッションストレージに保存
+  // 履歴が変更されたらローカルストレージに保存
   useEffect(() => {
+    // クライアントサイドでのみ実行
+    if (typeof window === 'undefined') return
+    
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(history))
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(history))
     } catch (error) {
       console.error('Failed to save history:', error)
     }
@@ -129,7 +135,9 @@ export function JournalHistoryProvider({ children }: { children: ReactNode }) {
   const clearHistory = () => {
     setHistory([])
     setCurrentSession(null)
-    sessionStorage.removeItem(STORAGE_KEY)
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(STORAGE_KEY)
+    }
   }
 
   // 特定の履歴アイテムを取得
