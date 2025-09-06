@@ -47,6 +47,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   const [modalReceipt, setModalReceipt] = useState<any>(null)
   const [modalJournal, setModalJournal] = useState<any>(null)
   const [videoReady, setVideoReady] = useState(false)
+  const [viewedReceiptIds, setViewedReceiptIds] = useState<Set<number>>(new Set()) // 確認済み領収書ID
   const videoRef = useRef<HTMLVideoElement>(null)
   const seekToRef = useRef<((time: number) => void) | null>(null)
   const exportMenuRef = useRef<HTMLDivElement>(null)
@@ -266,6 +267,9 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     })
     
     console.log('Found journal:', relatedJournal)
+    
+    // この領収書を確認済みとしてマーク
+    setViewedReceiptIds(prev => new Set(prev).add(receipt.id))
     
     // モーダルを開く
     setModalReceipt(receipt)
@@ -662,7 +666,21 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
           <div className="col-span-4">
             <div className="bg-white rounded-lg shadow-md overflow-hidden" style={{ maxHeight: '600px' }}>
               <div className="p-4 border-b bg-gray-50">
-                <h2 className="text-lg font-semibold text-gray-800">領収書一覧 ({video.receipts?.length || 0}件)</h2>
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-semibold text-gray-800">
+                    領収書一覧 ({video.receipts?.length || 0}件)
+                  </h2>
+                  <div className="flex items-center gap-2 text-xs text-gray-600">
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                      <span>確認済み ({viewedReceiptIds.size})</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-gray-300 rounded-full"></div>
+                      <span>未確認 ({(video.receipts?.length || 0) - viewedReceiptIds.size})</span>
+                    </div>
+                  </div>
+                </div>
               </div>
               
               <div className="overflow-y-auto" style={{ maxHeight: '540px' }}>
@@ -680,12 +698,14 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                         const relatedJournal = journals?.find((j: any) => j.receipt_id === receipt.id)
                         const isJournalConfirmed = relatedJournal?.status === 'confirmed'
                         
+                        const isViewed = viewedReceiptIds.has(receipt.id)
+                        
                         return (
                           <div 
                             key={`receipt-${receipt.id}-${index}`} 
-                            className={`p-3 cursor-pointer transition-all hover:bg-gray-50 ${
+                            className={`p-3 cursor-pointer transition-all hover:bg-gray-50 relative ${
                               selectedReceipt?.id === receipt.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
-                            }`}
+                            } ${isViewed ? 'bg-green-50' : ''}`}
                             onClick={(e) => {
                               // 削除ボタンがクリックされた場合は処理しない
                               if ((e.target as HTMLElement).closest('button')) {
@@ -707,9 +727,16 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                                   <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold text-gray-700">
                                     {index + 1}
                                   </div>
-                                  {/* 確認状態バッジ */}
-                                  {isJournalConfirmed && (
-                                    <CheckIcon className="absolute -right-1 -bottom-1 h-4 w-4 text-white bg-green-600 rounded-full p-0.5" />
+                                  {/* 確認状態バッジ - 더 크고 명확하게 */}
+                                  {isViewed && (
+                                    <div className="absolute -right-2 -bottom-2 animate-bounce-once">
+                                      <CheckIcon className="h-6 w-6 text-white bg-green-500 rounded-full p-1 shadow-lg ring-2 ring-white" />
+                                    </div>
+                                  )}
+                                  {isJournalConfirmed && !isViewed && (
+                                    <div className="absolute -right-1 -bottom-1">
+                                      <CheckIcon className="h-4 w-4 text-white bg-blue-600 rounded-full p-0.5" />
+                                    </div>
                                   )}
                                 </div>
                             {receipt.best_frame && (
