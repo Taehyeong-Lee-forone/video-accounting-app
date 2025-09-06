@@ -102,10 +102,10 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
       // 領収書も選択
       setSelectedReceipt(relatedReceipt)
       
-      // ビデオシーク
+      // ビデオシーク - 該当フレームに移動
       if (relatedReceipt.best_frame?.time_ms !== undefined && videoRef.current) {
         const seconds = relatedReceipt.best_frame.time_ms / 1000
-        setPlaying(false)
+        setPlaying(false)  // 一時停止
         
         setTimeout(() => {
           if (videoRef.current) {
@@ -114,10 +114,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
         }, 100)
       }
       
-      // モーダルを開く（オプション）
-      setModalReceipt(relatedReceipt)
-      setModalJournal(journal)
-      setShowReceiptModal(true)
+      // モーダルは開かない - ビデオフレームへの移動のみ
     } else if (videoRef.current && journal.time_ms) {
       // フォールバック: journalのtime_msを使用
       const seconds = journal.time_ms / 1000
