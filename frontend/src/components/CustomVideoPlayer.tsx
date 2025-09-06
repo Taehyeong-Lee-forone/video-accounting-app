@@ -22,6 +22,7 @@ interface CustomVideoPlayerProps {
   onTimeUpdate?: (time: number) => void
   onDuration?: (duration: number) => void
   videoRef?: React.MutableRefObject<HTMLVideoElement | null>
+  seekToRef?: React.MutableRefObject<((time: number) => void) | null>
 }
 
 export default function CustomVideoPlayer({ 
@@ -30,7 +31,8 @@ export default function CustomVideoPlayer({
   onReceiptClick,
   onTimeUpdate,
   onDuration,
-  videoRef: externalVideoRef
+  videoRef: externalVideoRef,
+  seekToRef
 }: CustomVideoPlayerProps) {
   const internalVideoRef = useRef<HTMLVideoElement>(null)
   const videoRef = externalVideoRef || internalVideoRef
@@ -96,6 +98,13 @@ export default function CustomVideoPlayer({
 
     performSeek(targetTime)
   }
+
+  // seekTo関数を外部から呼び出せるようにする
+  useEffect(() => {
+    if (seekToRef) {
+      seekToRef.current = seekTo
+    }
+  }, [seekToRef])
 
   const performSeek = (targetTime: number) => {
     const video = videoRef.current

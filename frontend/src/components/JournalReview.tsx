@@ -46,6 +46,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   const [modalJournal, setModalJournal] = useState<any>(null)
   const [videoReady, setVideoReady] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const seekToRef = useRef<((time: number) => void) | null>(null)
   const exportMenuRef = useRef<HTMLDivElement>(null)
 
   // ビデオ要素の準備状態を監視
@@ -150,63 +151,49 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     console.log('Receipt ID:', receipt.id)
     console.log('Best frame:', receipt.best_frame)
     console.log('Best frame time_ms:', receipt.best_frame?.time_ms)
+    console.log('Type of time_ms:', typeof receipt.best_frame?.time_ms)
     console.log('Full receipt data:', JSON.stringify(receipt, null, 2))
     
     setSelectedReceipt(receipt)
     
     // ビデオシーク - time_msの条件を緩和
     if (receipt.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== null) {
-      const seconds = receipt.best_frame.time_ms / 1000
+      const timeMs = Number(receipt.best_frame.time_ms)
+      const seconds = timeMs / 1000
+      console.log('Parsed time_ms:', timeMs)
       console.log('Seeking to:', seconds, 'seconds')
       console.log('Video element:', videoRef.current)
       console.log('Video ready state:', videoRef.current?.readyState)
+      console.log('Video duration:', videoRef.current?.duration)
       
-      const performSeek = () => {
-        if (!videoRef.current) {
-          toast.error('ビデオプレーヤーが準備できていません')
-          return
-        }
-        
-        const video = videoRef.current
-        
-        // ビデオが準備完了しているかチェック
-        if (!videoReady || video.readyState < 2) {
-          // まだ準備できていない場合は待機
-          const checkInterval = setInterval(() => {
-            if (video.readyState >= 2) {
-              clearInterval(checkInterval)
-              video.pause()
-              setPlaying(false)
-              try {
-                video.currentTime = seconds
-              } catch (e) {
-                toast.error('シーク中にエラーが発生しました')
-              }
-            }
-          }, 100)
+      // CustomVideoPlayerのseekTo関数を使用
+      if (seekToRef.current) {
+        console.log('Using CustomVideoPlayer seekTo function')
+        setPlaying(false)
+        seekToRef.current(seconds)
+      } else {
+        console.warn('seekTo function not available, falling back to direct seek')
+        // フォールバック: 直接currentTimeを設定
+        const performSeek = () => {
+          if (!videoRef.current) {
+            toast.error('ビデオプレーヤーが準備できていません')
+            return
+          }
           
-          // タイムアウト設定（3秒）
-          setTimeout(() => {
-            clearInterval(checkInterval)
-            if (video.readyState < 2) {
-              toast.error('ビデオの読み込みに失敗しました')
-            }
-          }, 3000)
-        } else {
-          // 準備完了している場合は即座にシーク
+          const video = videoRef.current
           video.pause()
           setPlaying(false)
           
           try {
+            console.log('Direct seek to:', seconds)
             video.currentTime = seconds
           } catch (e) {
+            console.error('Seek error:', e)
             toast.error('シーク中にエラーが発生しました')
           }
         }
+        performSeek()
       }
-      
-      // 即座に実行を試みる
-      performSeek()
     } else {
       // time_msがない場合も選択状態にはする
       toast('この領収書にはタイムスタンプがありません')
@@ -617,6 +604,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                   onTimeUpdate={(time) => setCurrentTime(time)}
                   onDuration={(duration) => setVideoDuration(duration)}
                   videoRef={videoRef}
+                  seekToRef={seekToRef}
                 />
               </div>
               
