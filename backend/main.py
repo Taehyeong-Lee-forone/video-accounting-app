@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 
 from database import engine, Base, get_db
-from routers import videos, journals, masters, auth, export, data_sync, password_reset
+from routers import videos, journals, masters, auth, export, data_sync, password_reset, video_stream
 from routers import auth_v2  # 新しい認証ルーター追加
 import logging
 
@@ -109,6 +109,7 @@ app.include_router(journals.router, prefix="/journals", tags=["仕訳"])
 app.include_router(masters.router, prefix="/masters", tags=["マスタ"])
 app.include_router(export.router, prefix="/export", tags=["エクスポート"])
 app.include_router(data_sync.router, tags=["データ同期"])  # データ同期API
+app.include_router(video_stream.router, prefix="/videos", tags=["ビデオストリーミング"])  # ビデオストリーミングAPI
 
 @app.get("/")
 async def root():

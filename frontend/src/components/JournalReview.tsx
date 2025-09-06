@@ -617,7 +617,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
               <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
                 <CustomVideoPlayer
                   key={`video-${videoId}`}
-                  url={video.local_path ? `${API_URL}/${video.local_path}` : ''}
+                  url={video.local_path ? `${API_URL}/videos/stream/${video.local_path.split('/').pop()}` : ''}
                   receipts={video.receipts || []}
                   onReceiptClick={handleReceiptClick}
                   onTimeUpdate={(time) => setCurrentTime(time)}
