@@ -58,19 +58,43 @@ export default function CustomVideoPlayer({
       return
     }
 
+    console.log('=== seekTo Debug ===')
+    console.log('Target time:', targetTime)
+    console.log('Video duration:', video.duration)
+    console.log('Video readyState:', video.readyState)
+    console.log('Video networkState:', video.networkState)
+    console.log('Video src:', video.src)
+    console.log('Video currentTime:', video.currentTime)
+
     // メタデータが読み込まれているかチェック
-    if (!video.duration || isNaN(video.duration)) {
+    if (!video.duration || isNaN(video.duration) || video.duration === 0) {
       console.warn('Video metadata not loaded yet, waiting...')
+      console.log('Duration is:', video.duration)
       
       // メタデータロードまで待機
       const handleMetadataLoaded = () => {
+        console.log('Metadata loaded event fired, duration:', video.duration)
         video.removeEventListener('loadedmetadata', handleMetadataLoaded)
+        video.removeEventListener('durationchange', handleMetadataLoaded)
         performSeek(targetTime)
       }
+      
       video.addEventListener('loadedmetadata', handleMetadataLoaded)
+      video.addEventListener('durationchange', handleMetadataLoaded)
       
       // メタデータを強制的に読み込む
+      console.log('Forcing video load...')
       video.load()
+      
+      // タイムアウト設定
+      setTimeout(() => {
+        if (!video.duration || video.duration === 0) {
+          console.error('Failed to load video metadata after timeout')
+          video.removeEventListener('loadedmetadata', handleMetadataLoaded)
+          video.removeEventListener('durationchange', handleMetadataLoaded)
+        }
+      }, 5000)
+      
       return
     }
 
@@ -112,6 +136,13 @@ export default function CustomVideoPlayer({
 
     console.log(`performSeek called with targetTime: ${targetTime}s, duration: ${video.duration}`)
     
+    // targetTimeが0の場合の特別処理
+    if (targetTime === 0 || targetTime < 0.1) {
+      console.log('Seeking to beginning of video')
+      video.currentTime = 0
+      return
+    }
+    
     // 既存のタイムアウトをクリア
     if (seekTimeoutRef.current) {
       clearTimeout(seekTimeoutRef.current)
@@ -123,25 +154,30 @@ export default function CustomVideoPlayer({
       video.pause()
     }
 
+    // targetTimeが範囲内かチェック
+    const safeTargetTime = Math.min(Math.max(0, targetTime), video.duration || targetTime)
+    console.log('Safe target time:', safeTargetTime)
+
     // メソッド1: fastSeekが利用可能な場合は使用
     if ('fastSeek' in video && typeof video.fastSeek === 'function') {
       try {
-        (video as any).fastSeek(targetTime)
+        (video as any).fastSeek(safeTargetTime)
         console.log('Used fastSeek')
       } catch (e) {
         console.error('fastSeek failed:', e)
-        video.currentTime = targetTime
+        video.currentTime = safeTargetTime
       }
     } else {
       // メソッド2: 通常のcurrentTime設定
-      video.currentTime = targetTime
+      video.currentTime = safeTargetTime
     }
 
     // フォールバック: 少し待ってから再度設定
     seekTimeoutRef.current = setTimeout(() => {
-      if (Math.abs(video.currentTime - targetTime) > 0.5) {
-        console.log(`Seek didn't work properly, retrying. Current: ${video.currentTime}, Target: ${targetTime}`)
-        video.currentTime = targetTime
+      console.log('Checking seek result - Current:', video.currentTime, 'Target:', safeTargetTime)
+      if (Math.abs(video.currentTime - safeTargetTime) > 0.5) {
+        console.log(`Seek didn't work properly, retrying.`)
+        video.currentTime = safeTargetTime
       }
       
       // 元々再生中だった場合は再生を再開
@@ -151,10 +187,25 @@ export default function CustomVideoPlayer({
     }, 100)
   }
 
-  // URLが変更されたときに動画を再ロード
+  // URLが変更されたときに動画を再ロードし、メタデータを事前にロード
   useEffect(() => {
     const video = videoRef.current
     if (!video || !url) return
+    
+    console.log('Loading new video:', url)
+    
+    // メタデータのプリロード
+    const preloadMetadata = () => {
+      if (video.readyState >= 1) {
+        console.log('Video metadata preloaded, duration:', video.duration)
+      }
+    }
+    
+    video.addEventListener('loadedmetadata', preloadMetadata)
+    video.addEventListener('durationchange', preloadMetadata)
+    
+    // preload属性を設定してメタデータを積極的にロード
+    video.preload = 'metadata'
     
     // 既存のシーク操作をクリア
     if (seekTimeoutRef.current) {
@@ -170,6 +221,12 @@ export default function CustomVideoPlayer({
     if (video.src !== url) {
       video.src = url
       video.load()
+    }
+    
+    // クリーンアップ
+    return () => {
+      video.removeEventListener('loadedmetadata', preloadMetadata)
+      video.removeEventListener('durationchange', preloadMetadata)
     }
   }, [url])
 
@@ -326,10 +383,9 @@ export default function CustomVideoPlayer({
     >
       <video
         ref={videoRef}
-        src={url}
         className="w-full h-full object-contain"
         onClick={handlePlayPause}
-        preload="metadata"
+        preload="auto"
         crossOrigin="anonymous"
         playsInline
         muted
