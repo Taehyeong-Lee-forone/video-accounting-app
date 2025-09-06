@@ -865,8 +865,11 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
             // 関連する仕訳も更新
             const relatedJournal = journals?.find((j: any) => j.receipt_id === receiptId)
             setModalJournal(relatedJournal || null)
+            // 閲覧済みとしてマーク
+            setViewedReceiptIds(prev => new Set(prev).add(receiptId))
           }
         }}
+        viewedReceiptIds={viewedReceiptIds}
       />
 
     </div>

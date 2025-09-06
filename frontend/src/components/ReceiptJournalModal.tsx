@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { XMarkIcon, CheckIcon, XCircleIcon, PencilIcon, ChevronLeftIcon, ChevronRightIcon, CameraIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, CheckIcon, XCircleIcon, PencilIcon, ChevronLeftIcon, ChevronRightIcon, CameraIcon, PlusIcon, TrashIcon, ClockIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { api, API_URL } from '@/lib/api'
 
@@ -18,6 +18,7 @@ interface ReceiptJournalModalProps {
   onUpdate: () => void
   allReceipts?: any[]  // すべての領収書リスト
   onReceiptChange?: (receiptId: number) => void  // 領収書変更コールバック
+  viewedReceiptIds?: Set<number>  // 確認済み領収書IDセット
 }
 
 export default function ReceiptJournalModal({ 
@@ -30,7 +31,8 @@ export default function ReceiptJournalModal({
   onClose,
   onUpdate,
   allReceipts = [],
-  onReceiptChange
+  onReceiptChange,
+  viewedReceiptIds = new Set()
 }: ReceiptJournalModalProps) {
   // 常に編集モードで開始
   const [receiptForm, setReceiptForm] = useState<any>({})
@@ -548,50 +550,123 @@ export default function ReceiptJournalModal({
             <div className="w-36 bg-gray-50 border-r flex flex-col h-full">
               <div className="p-2 border-b bg-white flex-shrink-0">
                 <h3 className="text-sm font-bold text-gray-900">領収書一覧</h3>
-                <p className="text-xs font-semibold text-gray-800">{localReceipts.length}件</p>
+                <div className="flex items-center justify-between mt-0.5">
+                  <p className="text-xs font-semibold text-gray-800">{localReceipts.length}件</p>
+                  <div className="flex items-center gap-2">
+                    {/* 確認済み数 */}
+                    {allJournals.filter((j: any) => j.status === 'confirmed').length > 0 && (
+                      <div className="flex items-center gap-0.5">
+                        <CheckIcon className="h-3 w-3 text-green-600" />
+                        <span className="text-xs font-medium text-green-700">
+                          {allJournals.filter((j: any) => j.status === 'confirmed').length}
+                        </span>
+                      </div>
+                    )}
+                    {/* 閲覧済み数 */}
+                    {viewedReceiptIds.size > 0 && (
+                      <div className="flex items-center gap-0.5">
+                        <ClockIcon className="h-3 w-3 text-orange-500" />
+                        <span className="text-xs font-medium text-orange-600">
+                          {viewedReceiptIds.size}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
                 {localReceipts.map((r, index) => {
                   // この領収書のjournalを検索
                   const relatedJournal = allJournals.find((j: any) => j.receipt_id === r.id)
                   const isJournalConfirmed = relatedJournal?.status === 'confirmed'
+                  const isViewed = viewedReceiptIds.has(r.id)
+                  const isCurrentReceipt = r.id === receipt?.id
                   
                   return (
                     <button
                       key={r.id}
                       onClick={() => handleReceiptNavigation(r.id)}
-                      className={`w-full p-2 text-left hover:bg-gray-100 transition-colors border-b border-gray-200 ${
-                        r.id === receipt?.id ? 'bg-blue-50 border-l-2 border-l-blue-500' : ''
+                      className={`w-full p-2 text-left transition-all duration-200 border-b border-gray-200 relative overflow-hidden ${
+                        isCurrentReceipt 
+                          ? 'bg-gradient-to-r from-blue-100 to-blue-50 border-l-4 border-l-blue-600 shadow-md ring-1 ring-blue-200' 
+                          : isViewed
+                          ? 'bg-gradient-to-r from-green-50 to-white hover:from-green-100 hover:to-green-50'
+                          : 'hover:bg-gray-100'
                       }`}
                     >
-                      <div className="flex items-start gap-1">
+                      {/* 現在選択中の領収書の背景効果 */}
+                      {isCurrentReceipt && (
+                        <div className="absolute inset-0 bg-blue-400 opacity-5 animate-pulse" />
+                      )}
+                      
+                      <div className="flex items-start gap-1 relative">
                         <div className="flex flex-col items-center gap-0.5">
-                          <span className={`text-xs font-bold ${
-                            r.id === receipt?.id ? 'text-blue-600' : 'text-gray-600'
+                          {/* 番号バッジ */}
+                          <div className={`flex items-center justify-center w-6 h-6 rounded-full font-bold text-xs ${
+                            isCurrentReceipt 
+                              ? 'bg-blue-600 text-white shadow-sm' 
+                              : isViewed
+                              ? 'bg-green-600 text-white'
+                              : 'bg-gray-200 text-gray-700'
                           }`}>
                             {index + 1}
-                          </span>
-                          {/* 確認状態アイコン */}
+                          </div>
+                          
+                          {/* 確認状態表示（大きめのチェックマーク） */}
                           {isJournalConfirmed && (
-                            <CheckIcon className="h-3 w-3 text-green-600" title="確認済み" />
+                            <div className="relative">
+                              <div className="absolute -inset-1 bg-green-400 rounded-full opacity-30 animate-ping" />
+                              <div className="relative bg-green-100 rounded-full p-0.5">
+                                <CheckIcon className="h-4 w-4 text-green-700 font-bold" />
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* 閲覧済みだが未確認の場合 */}
+                          {isViewed && !isJournalConfirmed && (
+                            <div className="bg-orange-100 rounded-full p-0.5">
+                              <ClockIcon className="h-3 w-3 text-orange-600" title="閲覧済み（未確認）" />
+                            </div>
                           )}
                         </div>
+                        
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-gray-900 truncate">
+                          {/* 店舗名 */}
+                          <p className={`text-xs font-bold truncate ${
+                            isCurrentReceipt ? 'text-blue-900' : 'text-gray-900'
+                          }`}>
                             {r.vendor || '不明'}
                           </p>
-                          <p className="text-xs font-semibold text-gray-800">
+                          
+                          {/* 金額（太字で強調） */}
+                          <p className={`text-sm font-extrabold ${
+                            isCurrentReceipt ? 'text-blue-800' : 'text-gray-800'
+                          }`}>
                             ¥{r.total?.toLocaleString() || 0}
                           </p>
-                          <p className="text-xs font-semibold text-gray-800">
-                            {((r.best_frame?.time_ms || 0) / 1000).toFixed(1)}s
-                          </p>
+                          
+                          {/* タイムスタンプ */}
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <ClockIcon className="h-3 w-3 text-gray-400" />
+                            <span className="text-xs text-gray-600">
+                              {((r.best_frame?.time_ms || 0) / 1000).toFixed(1)}s
+                            </span>
+                          </div>
+                          
+                          {/* 手動追加バッジ */}
                           {r.is_manual && (
-                            <span className="inline-block px-1 py-0.5 bg-green-100 text-green-700 text-xs rounded">
+                            <span className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium mt-1">
                               手動
                             </span>
                           )}
                         </div>
+                        
+                        {/* 現在選択中インジケーター */}
+                        {isCurrentReceipt && (
+                          <div className="absolute -right-1 top-1/2 -translate-y-1/2">
+                            <ChevronRightIcon className="h-5 w-5 text-blue-600 animate-bounce-horizontal" />
+                          </div>
+                        )}
                       </div>
                     </button>
                   )

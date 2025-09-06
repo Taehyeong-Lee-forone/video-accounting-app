@@ -129,3 +129,17 @@
 .pulse-green {
   animation: pulse-green 2s infinite;
 }
+
+/* 水平バウンスアニメーション */
+@keyframes bounce-horizontal {
+  0%, 100% {
+    transform: translateX(0) translateY(-50%);
+  }
+  50% {
+    transform: translateX(4px) translateY(-50%);
+  }
+}
+
+.animate-bounce-horizontal {
+  animation: bounce-horizontal 1s ease-in-out infinite;
+}
