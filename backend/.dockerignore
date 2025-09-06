@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+*.pytest_cache
+.coverage
+*.cover
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.DS_Store
+
+# Local files
+*.db
+*.sqlite
+*.sqlite3
+video_accounting.db
+accounting.db
+test.db
+app.db
+database.db
+sqlite.db
+video_receipts.db
+
+# Migration scripts (ローカル専用)
+migrate_db.py
+test_*.py
+*_test.py
+
+# Uploads (local only)
+uploads/
+frames/
+thumbnails/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Logs
+*.log
+logs/
+
+# Other
+.dockerignore
+Dockerfile
+docker-compose*.yml
+render.yaml
