@@ -11,6 +11,7 @@ import JournalTable from './JournalTable'
 import ReceiptJournalModal from './ReceiptJournalModal'
 import CustomVideoPlayer from './CustomVideoPlayer'
 import { ArrowDownTrayIcon, CameraIcon, PlusIcon, XMarkIcon, PencilIcon, CheckIcon, XCircleIcon, ClockIcon, ChevronDownIcon, PlayIcon, PauseIcon, ChevronLeftIcon, ChevronRightIcon, BackwardIcon, ForwardIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { useJournalHistory } from '@/contexts/JournalHistoryContext'
 
 interface JournalReviewProps {
   videoId: number
@@ -19,6 +20,7 @@ interface JournalReviewProps {
 export default function JournalReview({ videoId }: JournalReviewProps) {
   const { data: video, isLoading: videoLoading, refetch: refetchVideo } = useVideoDetail(videoId)
   const { data: journals, isLoading: journalsLoading, refetch: refetchJournals } = useJournals(videoId)
+  const { addToHistory, updateCurrentSession } = useJournalHistory()
   const [selectedJournal, setSelectedJournal] = useState<any>(null)
   
   // デバッグログ追加
@@ -91,6 +93,32 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
       })
     }
   }, [video])
+
+  // 履歴に追加・更新
+  useEffect(() => {
+    if (video && !videoLoading) {
+      // 初回アクセス時に履歴に追加
+      addToHistory({
+        videoId: videoId,
+        videoTitle: video.filename || `動画 #${videoId}`,
+        currentTime: currentTime,
+        totalReceipts: video.receipts?.length || 0,
+        totalJournals: journals?.length || 0,
+        thumbnailUrl: video.thumbnail_path ? `${API_URL}/${video.thumbnail_path}` : undefined
+      })
+    }
+  }, [video, videoLoading, videoId])
+
+  // 現在の再生位置を定期的に更新
+  useEffect(() => {
+    if (video && currentTime > 0) {
+      updateCurrentSession(videoId, {
+        currentTime: currentTime,
+        totalReceipts: video.receipts?.length || 0,
+        totalJournals: journals?.length || 0
+      })
+    }
+  }, [currentTime, video, journals])
 
   // seekToRef の状態を監視
   useEffect(() => {

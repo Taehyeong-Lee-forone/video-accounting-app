@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { HomeIcon, CogIcon, DocumentArrowDownIcon, PlayIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline'
+import { HomeIcon, CogIcon, DocumentArrowDownIcon, PlayIcon, ArrowRightOnRectangleIcon, ClockIcon } from '@heroicons/react/24/outline'
 import { useAuthStore } from '@/stores/authStore'
 
 const navigation = [
   { name: 'ホーム', href: '/', icon: HomeIcon },
   { name: 'アップロード', href: '/upload', icon: PlayIcon },
+  { name: '履歴', href: '/history', icon: ClockIcon },
   { name: '設定', href: '/settings', icon: CogIcon },
 ]
 

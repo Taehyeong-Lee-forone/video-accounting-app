@@ -5,6 +5,7 @@ import { Providers } from './providers'
 import { Toaster } from 'react-hot-toast'
 import Navigation from '@/components/Navigation'
 import AuthProvider from '@/components/AuthProvider'
+import { JournalHistoryProvider } from '@/contexts/JournalHistoryContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -23,12 +24,14 @@ export default function RootLayout({
       <body className={inter.className}>
         <Providers>
           <AuthProvider>
-            <div className="min-h-screen bg-gray-50">
-              <Navigation />
-              <main className="container mx-auto px-4 py-8">
-                {children}
-              </main>
-            </div>
+            <JournalHistoryProvider>
+              <div className="min-h-screen bg-gray-50">
+                <Navigation />
+                <main className="container mx-auto px-4 py-8">
+                  {children}
+                </main>
+              </div>
+            </JournalHistoryProvider>
           </AuthProvider>
           <Toaster 
             position="bottom-left"
