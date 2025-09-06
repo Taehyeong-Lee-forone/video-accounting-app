@@ -11,7 +11,7 @@ export default function JournalHistory() {
   const router = useRouter()
 
   const handleResumeSession = (videoId: number) => {
-    router.push(`/journal-review/${videoId}`)
+    router.push(`/review/${videoId}`)
   }
 
   const formatTime = (seconds: number) => {
