@@ -75,6 +75,22 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     return () => clearInterval(interval)
   }, [video?.local_path]) // ビデオパスが変更されたら再実行
 
+  // ビデオデータの確認用デバッグログ
+  useEffect(() => {
+    if (video?.receipts) {
+      console.log('=== Video Receipts Data ===')
+      video.receipts.forEach((r: any, idx: number) => {
+        console.log(`Receipt ${idx + 1}:`, {
+          id: r.id,
+          vendor: r.vendor,
+          best_frame_id: r.best_frame_id,
+          best_frame: r.best_frame,
+          time_ms: r.best_frame?.time_ms
+        })
+      })
+    }
+  }, [video])
+
   // Close export menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -138,10 +154,12 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     
     setSelectedReceipt(receipt)
     
-    // ビデオシーク
-    if (receipt.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== null && receipt.best_frame.time_ms > 0) {
+    // ビデオシーク - time_msの条件を緩和
+    if (receipt.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== null) {
       const seconds = receipt.best_frame.time_ms / 1000
       console.log('Seeking to:', seconds, 'seconds')
+      console.log('Video element:', videoRef.current)
+      console.log('Video ready state:', videoRef.current?.readyState)
       
       const performSeek = () => {
         if (!videoRef.current) {
