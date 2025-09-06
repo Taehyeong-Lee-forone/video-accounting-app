@@ -86,9 +86,8 @@ export default function CustomVideoPlayer({
       video.addEventListener('loadedmetadata', handleMetadataLoaded)
       video.addEventListener('durationchange', handleMetadataLoaded)
       
-      // メタデータを強制的に読み込む
-      console.log('Forcing video load...')
-      video.load()
+      // video.load()を呼ばずに、メタデータが自然にロードされるのを待つ
+      console.log('Waiting for metadata to load naturally...')
       
       // タイムアウト設定
       setTimeout(() => {
@@ -96,6 +95,8 @@ export default function CustomVideoPlayer({
           console.error('Failed to load video metadata after timeout')
           video.removeEventListener('loadedmetadata', handleMetadataLoaded)
           video.removeEventListener('durationchange', handleMetadataLoaded)
+          // それでも試みる
+          performSeek(targetTime)
         }
       }, 5000)
       
@@ -161,48 +162,74 @@ export default function CustomVideoPlayer({
       clearTimeout(seekTimeoutRef.current)
     }
 
-    // 一時停止してからシーク（新規動画の場合に有効）
-    const wasPlaying = !video.paused
-    if (wasPlaying) {
-      video.pause()
-    }
-
     // targetTimeが範囲内かチェック
     const safeTargetTime = Math.min(Math.max(0, targetTime), video.duration || targetTime)
     console.log('Safe target time:', safeTargetTime)
 
-    // メソッド1: fastSeekが利用可能な場合は使用
-    if ('fastSeek' in video && typeof video.fastSeek === 'function') {
-      try {
-        console.log('Attempting fastSeek to:', safeTargetTime)
-        (video as any).fastSeek(safeTargetTime)
-        console.log('fastSeek completed, currentTime now:', video.currentTime)
-      } catch (e) {
-        console.error('fastSeek failed:', e)
-        console.log('Falling back to currentTime assignment')
-        video.currentTime = safeTargetTime
-        console.log('After fallback, currentTime:', video.currentTime)
-      }
-    } else {
-      // メソッド2: 通常のcurrentTime設定
-      console.log('Setting currentTime directly to:', safeTargetTime)
-      video.currentTime = safeTargetTime
-      console.log('After setting, currentTime:', video.currentTime)
-    }
-
-    // フォールバック: 少し待ってから再度設定
-    seekTimeoutRef.current = setTimeout(() => {
-      console.log('Checking seek result - Current:', video.currentTime, 'Target:', safeTargetTime)
-      if (Math.abs(video.currentTime - safeTargetTime) > 0.5) {
-        console.log(`Seek didn't work properly, retrying.`)
-        video.currentTime = safeTargetTime
+    // requestAnimationFrameを使用してブラウザの次のレンダリングサイクルで実行
+    requestAnimationFrame(() => {
+      console.log('=== Inside requestAnimationFrame ===')
+      console.log('Current time before seek:', video.currentTime)
+      console.log('Attempting to set to:', safeTargetTime)
+      
+      // 一時停止してからシーク
+      const wasPlaying = !video.paused
+      if (wasPlaying) {
+        console.log('Pausing video before seek')
+        video.pause()
       }
       
-      // 元々再生中だった場合は再生を再開
-      if (wasPlaying) {
-        video.play()
+      // メソッド1: fastSeekが利用可能な場合は使用
+      if ('fastSeek' in video && typeof video.fastSeek === 'function') {
+        try {
+          console.log('Using fastSeek')
+          (video as any).fastSeek(safeTargetTime)
+          console.log('fastSeek completed, currentTime now:', video.currentTime)
+        } catch (e) {
+          console.error('fastSeek failed:', e)
+          console.log('Falling back to currentTime assignment')
+          video.currentTime = safeTargetTime
+          console.log('After fallback, currentTime:', video.currentTime)
+        }
+      } else {
+        // メソッド2: 通常のcurrentTime設定
+        console.log('Setting currentTime directly')
+        video.currentTime = safeTargetTime
+        console.log('Immediately after setting, currentTime:', video.currentTime)
+        
+        // 2回目のrequestAnimationFrameで確認
+        requestAnimationFrame(() => {
+          console.log('=== Second frame check ===')
+          console.log('Current time after frame:', video.currentTime)
+          
+          if (Math.abs(video.currentTime - safeTargetTime) > 0.5) {
+            console.log('Seek failed, trying again')
+            video.currentTime = safeTargetTime
+            console.log('After retry, currentTime:', video.currentTime)
+          }
+        })
       }
-    }, 100)
+      
+      // 少し待ってから再生を再開
+      seekTimeoutRef.current = setTimeout(() => {
+        console.log('=== Final check after timeout ===')
+        console.log('Current time:', video.currentTime)
+        console.log('Target was:', safeTargetTime)
+        
+        if (Math.abs(video.currentTime - safeTargetTime) > 0.5) {
+          console.log('Still not at target, final retry')
+          video.currentTime = safeTargetTime
+        }
+        
+        // 元々再生中だった場合は再生を再開
+        if (wasPlaying) {
+          console.log('Resuming playback')
+          video.play().catch(err => {
+            console.error('Failed to resume playback:', err)
+          })
+        }
+      }, 200)
+    })
   }
 
   // URLが変更されたときに動画を再ロードし、メタデータを事前にロード
@@ -210,7 +237,18 @@ export default function CustomVideoPlayer({
     const video = videoRef.current
     if (!video || !url) return
     
+    // URLが実際に変更された場合のみ処理を実行
+    const currentSrc = video.src
+    const newSrc = url.startsWith('http') ? url : new URL(url, window.location.origin).href
+    
+    if (currentSrc === newSrc) {
+      console.log('Video URL unchanged, skipping reload')
+      return
+    }
+    
     console.log('Loading new video:', url)
+    console.log('Current src:', currentSrc)
+    console.log('New src:', newSrc)
     
     // メタデータのプリロード
     const preloadMetadata = () => {
@@ -235,11 +273,9 @@ export default function CustomVideoPlayer({
     setDuration(0)
     setIsPlaying(false)
     
-    // 新しいURLをロード（srcが異なる場合のみ）
-    if (video.src !== url) {
-      video.src = url
-      video.load()
-    }
+    // 新しいURLをロード
+    video.src = newSrc
+    video.load()
     
     // クリーンアップ
     return () => {
@@ -406,7 +442,6 @@ export default function CustomVideoPlayer({
         preload="auto"
         crossOrigin="anonymous"
         playsInline
-        muted
       />
       
       {/* Controls Overlay */}
