@@ -104,13 +104,13 @@ export default function CustomVideoPlayer({
     // 2 = HAVE_CURRENT_DATA - 現在のフレームのみ
     // 3 = HAVE_FUTURE_DATA - 少なくとも次のフレームあり
     // 4 = HAVE_ENOUGH_DATA - 十分なデータあり
-    if (video.readyState < 2) {
-      console.warn(`Video not fully ready for seeking. readyState: ${video.readyState}, waiting...`)
+    if (video.readyState < 1) {
+      console.warn(`Video not ready for seeking. readyState: ${video.readyState}, waiting...`)
       
-      // readyStateが改善されるまで待機（条件を緩和）
+      // readyStateが改善されるまで待機（条件を緩和 - メタデータのみで十分）
       const waitForReady = () => {
-        if (video.readyState >= 2 || video.duration) {
-          console.log('Video is now ready, proceeding with seek')
+        if (video.readyState >= 1 && video.duration > 0) {
+          console.log('Video metadata ready, proceeding with seek')
           performSeek(targetTime)
         } else {
           setTimeout(waitForReady, 100)
@@ -120,7 +120,13 @@ export default function CustomVideoPlayer({
       return
     }
 
-    performSeek(targetTime)
+    // メタデータはあるが、durationがまだ設定されていない場合
+    if (video.duration > 0) {
+      performSeek(targetTime)
+    } else {
+      console.warn('Duration still 0, forcing seek anyway')
+      performSeek(targetTime)
+    }
   }
 
   // seekTo関数を外部から呼び出せるようにする
@@ -135,13 +141,6 @@ export default function CustomVideoPlayer({
     if (!video) return
 
     console.log(`performSeek called with targetTime: ${targetTime}s, duration: ${video.duration}`)
-    
-    // targetTimeが0の場合の特別処理
-    if (targetTime === 0 || targetTime < 0.1) {
-      console.log('Seeking to beginning of video')
-      video.currentTime = 0
-      return
-    }
     
     // 既存のタイムアウトをクリア
     if (seekTimeoutRef.current) {
