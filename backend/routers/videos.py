@@ -507,7 +507,8 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
                         tax_account=entry_data.tax_account,
                         tax_amount=entry_data.tax_amount,
                         memo=entry_data.memo,
-                        status='unconfirmed'
+                        status='unconfirmed',
+                        transaction_date=receipt.issue_date if receipt.issue_date else datetime.now().date()
                     )
                     db.add(journal_entry)
             
@@ -912,7 +913,8 @@ async def run_video_analysis(video_id: int, fps: int, db: Session):
                             tax_account=entry_data.tax_account,
                             tax_amount=entry_data.tax_amount,
                             memo=entry_data.memo,
-                            status='unconfirmed'
+                            status='unconfirmed',
+                            transaction_date=receipt.issue_date if receipt.issue_date else datetime.now().date()
                         )
                         db.add(journal_entry)
                         db.commit()
@@ -1489,7 +1491,8 @@ async def analyze_frame_at_time(
                     tax_account=entry_data.tax_account,
                     tax_amount=entry_data.tax_amount,
                     memo=entry_data.memo,
-                    status='unconfirmed'
+                    status='unconfirmed',
+                    transaction_date=receipt.issue_date if receipt.issue_date else datetime.now().date()
                 )
                 db.add(journal_entry)
             
@@ -2401,7 +2404,8 @@ def process_video_ocr_sync(video_id: int, db: Session):
                                     tax_account=entry_data.tax_account,
                                     tax_amount=entry_data.tax_amount,
                                     memo=entry_data.memo,
-                                    status='unconfirmed'
+                                    status='unconfirmed',
+                                    transaction_date=receipt.issue_date if receipt.issue_date else datetime.now().date()
                                 )
                                 db.add(journal_entry)
                             db.commit()

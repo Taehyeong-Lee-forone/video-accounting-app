@@ -171,7 +171,8 @@ async def generate_missing_journals(
                         tax_account=entry_data.tax_account,
                         tax_amount=entry_data.tax_amount,
                         memo=entry_data.memo,
-                        status='unconfirmed'
+                        status='unconfirmed',
+                        transaction_date=receipt.issue_date if receipt.issue_date else datetime.now().date()
                     )
                     db.add(journal_entry)
                     generated_count += 1
