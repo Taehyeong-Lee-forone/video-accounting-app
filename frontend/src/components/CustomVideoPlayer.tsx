@@ -52,6 +52,10 @@ export default function CustomVideoPlayer({
 
   // シーク機能を確実に実行する関数
   const seekTo = (targetTime: number) => {
+    console.log('=== seekTo Function Called ===')
+    console.log('Received targetTime:', targetTime)
+    console.log('Type of targetTime:', typeof targetTime)
+    
     const video = videoRef.current
     if (!video) {
       console.error('Video element not found')
@@ -64,7 +68,7 @@ export default function CustomVideoPlayer({
     console.log('Video readyState:', video.readyState)
     console.log('Video networkState:', video.networkState)
     console.log('Video src:', video.src)
-    console.log('Video currentTime:', video.currentTime)
+    console.log('Video currentTime before:', video.currentTime)
 
     // メタデータが読み込まれているかチェック
     if (!video.duration || isNaN(video.duration) || video.duration === 0) {
@@ -131,16 +135,26 @@ export default function CustomVideoPlayer({
 
   // seekTo関数を外部から呼び出せるようにする
   useEffect(() => {
+    console.log('=== CustomVideoPlayer seekTo Setup ===')
+    console.log('seekToRef provided:', !!seekToRef)
     if (seekToRef) {
       seekToRef.current = seekTo
+      console.log('seekTo function assigned to ref')
+      console.log('seekToRef.current after assignment:', seekToRef.current)
     }
   }, [seekToRef])
 
   const performSeek = (targetTime: number) => {
+    console.log('=== performSeek Called ===')
+    console.log('Input targetTime:', targetTime)
+    
     const video = videoRef.current
-    if (!video) return
+    if (!video) {
+      console.error('No video element in performSeek')
+      return
+    }
 
-    console.log(`performSeek called with targetTime: ${targetTime}s, duration: ${video.duration}`)
+    console.log(`performSeek: targetTime=${targetTime}s, duration=${video.duration}, currentTime=${video.currentTime}`)
     
     // 既存のタイムアウトをクリア
     if (seekTimeoutRef.current) {
@@ -160,15 +174,20 @@ export default function CustomVideoPlayer({
     // メソッド1: fastSeekが利用可能な場合は使用
     if ('fastSeek' in video && typeof video.fastSeek === 'function') {
       try {
+        console.log('Attempting fastSeek to:', safeTargetTime)
         (video as any).fastSeek(safeTargetTime)
-        console.log('Used fastSeek')
+        console.log('fastSeek completed, currentTime now:', video.currentTime)
       } catch (e) {
         console.error('fastSeek failed:', e)
+        console.log('Falling back to currentTime assignment')
         video.currentTime = safeTargetTime
+        console.log('After fallback, currentTime:', video.currentTime)
       }
     } else {
       // メソッド2: 通常のcurrentTime設定
+      console.log('Setting currentTime directly to:', safeTargetTime)
       video.currentTime = safeTargetTime
+      console.log('After setting, currentTime:', video.currentTime)
     }
 
     // フォールバック: 少し待ってから再度設定

@@ -92,6 +92,14 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     }
   }, [video])
 
+  // seekToRef の状態を監視
+  useEffect(() => {
+    console.log('=== seekToRef Status ===')
+    console.log('seekToRef:', seekToRef)
+    console.log('seekToRef.current:', seekToRef.current)
+    console.log('Type:', typeof seekToRef.current)
+  }, [seekToRef.current])
+
   // Close export menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -160,19 +168,30 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     if (receipt.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== null) {
       const timeMs = Number(receipt.best_frame.time_ms)
       const seconds = timeMs / 1000
+      console.log('=== Seek Debug ===')
+      console.log('Receipt ID:', receipt.id)
+      console.log('Raw time_ms:', receipt.best_frame.time_ms)
       console.log('Parsed time_ms:', timeMs)
       console.log('Seeking to:', seconds, 'seconds')
+      console.log('seekToRef.current:', seekToRef.current)
       console.log('Video element:', videoRef.current)
       console.log('Video ready state:', videoRef.current?.readyState)
       console.log('Video duration:', videoRef.current?.duration)
       
       // CustomVideoPlayerのseekTo関数を使用
-      if (seekToRef.current) {
-        console.log('Using CustomVideoPlayer seekTo function')
+      if (seekToRef.current && typeof seekToRef.current === 'function') {
+        console.log('Calling seekTo with:', seconds)
         setPlaying(false)
-        seekToRef.current(seconds)
+        
+        // 少し遅延を入れて確実に実行
+        setTimeout(() => {
+          console.log('Delayed seekTo call with:', seconds)
+          if (seekToRef.current) {
+            seekToRef.current(seconds)
+          }
+        }, 50)
       } else {
-        console.warn('seekTo function not available, falling back to direct seek')
+        console.error('seekTo function not available!', seekToRef.current)
         // フォールバック: 直接currentTimeを設定
         const performSeek = () => {
           if (!videoRef.current) {
