@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, ForeignKey, UniqueConstraint, Index, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Float, DateTime, Date, Boolean, Text, ForeignKey, UniqueConstraint, Index, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -217,6 +217,7 @@ class JournalEntry(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)  # 一時的にnullable
     receipt_id = Column(Integer, ForeignKey("receipts.id", ondelete="CASCADE"), nullable=False)
     video_id = Column(Integer, ForeignKey("videos.id", ondelete="CASCADE"), nullable=False)
+    transaction_date = Column(Date, nullable=False)  # プロダクションDBに存在するフィールド
     time_ms = Column(Integer)
     debit_account = Column(String(100))
     credit_account = Column(String(100))

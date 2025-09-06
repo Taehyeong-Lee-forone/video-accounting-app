@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict, field_serializer, EmailStr
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from typing import Optional, List, Dict, Any
 # from enum import Enum  # Enum使用を削除
 
@@ -192,6 +192,7 @@ class ReceiptResponse(BaseModel):
 class JournalEntryCreate(BaseModel):
     receipt_id: int
     video_id: int
+    transaction_date: Optional[date] = None
     time_ms: int
     debit_account: str
     credit_account: str
@@ -217,6 +218,7 @@ class JournalEntryResponse(BaseModel):
     id: int
     receipt_id: int
     video_id: int
+    transaction_date: Optional[date] = None
     time_ms: Optional[int] = None
     debit_account: Optional[str] = None
     credit_account: Optional[str] = None
