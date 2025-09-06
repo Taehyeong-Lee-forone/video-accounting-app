@@ -616,7 +616,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
               
               <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
                 <CustomVideoPlayer
-                  key={`video-${videoId}-${video.updated_at}`}
+                  key={`video-${videoId}`}
                   url={video.local_path ? `${API_URL}/${video.local_path}` : ''}
                   receipts={video.receipts || []}
                   onReceiptClick={handleReceiptClick}

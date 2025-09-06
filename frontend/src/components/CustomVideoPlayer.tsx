@@ -157,6 +157,39 @@ export default function CustomVideoPlayer({
 
     console.log(`performSeek: targetTime=${targetTime}s, duration=${video.duration}, currentTime=${video.currentTime}`)
     
+    // seekable範囲をチェック
+    if (video.seekable && video.seekable.length > 0) {
+      console.log('Seekable ranges:')
+      for (let i = 0; i < video.seekable.length; i++) {
+        console.log(`  Range ${i}: ${video.seekable.start(i)} - ${video.seekable.end(i)}`)
+      }
+      
+      // targetTimeがseekable範囲内かチェック
+      let isSeekable = false
+      for (let i = 0; i < video.seekable.length; i++) {
+        if (targetTime >= video.seekable.start(i) && targetTime <= video.seekable.end(i)) {
+          isSeekable = true
+          break
+        }
+      }
+      
+      if (!isSeekable) {
+        console.warn(`Target time ${targetTime} is not in seekable range`)
+      }
+    } else {
+      console.warn('No seekable ranges available')
+    }
+    
+    // ネットワーク状態とバッファ状態をチェック
+    console.log('Network state:', video.networkState)
+    console.log('Ready state:', video.readyState)
+    console.log('Buffered ranges:')
+    if (video.buffered && video.buffered.length > 0) {
+      for (let i = 0; i < video.buffered.length; i++) {
+        console.log(`  Buffer ${i}: ${video.buffered.start(i)} - ${video.buffered.end(i)}`)
+      }
+    }
+    
     // 既存のタイムアウトをクリア
     if (seekTimeoutRef.current) {
       clearTimeout(seekTimeoutRef.current)
@@ -165,71 +198,70 @@ export default function CustomVideoPlayer({
     // targetTimeが範囲内かチェック
     const safeTargetTime = Math.min(Math.max(0, targetTime), video.duration || targetTime)
     console.log('Safe target time:', safeTargetTime)
-
-    // requestAnimationFrameを使用してブラウザの次のレンダリングサイクルで実行
-    requestAnimationFrame(() => {
-      console.log('=== Inside requestAnimationFrame ===')
-      console.log('Current time before seek:', video.currentTime)
-      console.log('Attempting to set to:', safeTargetTime)
+    
+    // まず動画を一時停止
+    const wasPlaying = !video.paused
+    console.log('Was playing:', wasPlaying)
+    
+    if (!video.paused) {
+      video.pause()
+      console.log('Paused video')
+    }
+    
+    // 少し待ってから seek を実行（動画の状態を安定させるため）
+    setTimeout(() => {
+      console.log('=== Attempting seek after pause ===')
+      console.log('Current src:', video.src)
+      console.log('Current time before:', video.currentTime)
       
-      // 一時停止してからシーク
-      const wasPlaying = !video.paused
-      if (wasPlaying) {
-        console.log('Pausing video before seek')
-        video.pause()
-      }
-      
-      // メソッド1: fastSeekが利用可能な場合は使用
-      if ('fastSeek' in video && typeof video.fastSeek === 'function') {
-        try {
-          console.log('Using fastSeek')
-          (video as any).fastSeek(safeTargetTime)
-          console.log('fastSeek completed, currentTime now:', video.currentTime)
-        } catch (e) {
-          console.error('fastSeek failed:', e)
-          console.log('Falling back to currentTime assignment')
-          video.currentTime = safeTargetTime
-          console.log('After fallback, currentTime:', video.currentTime)
-        }
-      } else {
-        // メソッド2: 通常のcurrentTime設定
-        console.log('Setting currentTime directly')
+      // シンプルに currentTime を設定
+      try {
         video.currentTime = safeTargetTime
-        console.log('Immediately after setting, currentTime:', video.currentTime)
+        console.log('Set currentTime to:', safeTargetTime)
+        console.log('Current time after:', video.currentTime)
         
-        // 2回目のrequestAnimationFrameで確認
-        requestAnimationFrame(() => {
-          console.log('=== Second frame check ===')
-          console.log('Current time after frame:', video.currentTime)
+        // seeked イベントを待つ
+        const onSeeked = () => {
+          console.log('=== Seeked event fired ===')
+          console.log('Final currentTime:', video.currentTime)
+          video.removeEventListener('seeked', onSeeked)
           
-          if (Math.abs(video.currentTime - safeTargetTime) > 0.5) {
-            console.log('Seek failed, trying again')
-            video.currentTime = safeTargetTime
-            console.log('After retry, currentTime:', video.currentTime)
+          // 再生を再開
+          if (wasPlaying) {
+            video.play().then(() => {
+              console.log('Playback resumed')
+            }).catch(err => {
+              console.error('Failed to resume playback:', err)
+            })
           }
-        })
+        }
+        
+        const onSeeking = () => {
+          console.log('=== Seeking event fired ===')
+          video.removeEventListener('seeking', onSeeking)
+        }
+        
+        const onError = (e: Event) => {
+          console.error('=== Video error during seek ===', e)
+          video.removeEventListener('error', onError)
+        }
+        
+        // イベントリスナーを追加
+        video.addEventListener('seeked', onSeeked)
+        video.addEventListener('seeking', onSeeking)
+        video.addEventListener('error', onError)
+        
+        // タイムアウトでクリーンアップ
+        setTimeout(() => {
+          video.removeEventListener('seeked', onSeeked)
+          video.removeEventListener('seeking', onSeeking)
+          video.removeEventListener('error', onError)
+        }, 5000)
+        
+      } catch (error) {
+        console.error('Error setting currentTime:', error)
       }
-      
-      // 少し待ってから再生を再開
-      seekTimeoutRef.current = setTimeout(() => {
-        console.log('=== Final check after timeout ===')
-        console.log('Current time:', video.currentTime)
-        console.log('Target was:', safeTargetTime)
-        
-        if (Math.abs(video.currentTime - safeTargetTime) > 0.5) {
-          console.log('Still not at target, final retry')
-          video.currentTime = safeTargetTime
-        }
-        
-        // 元々再生中だった場合は再生を再開
-        if (wasPlaying) {
-          console.log('Resuming playback')
-          video.play().catch(err => {
-            console.error('Failed to resume playback:', err)
-          })
-        }
-      }, 200)
-    })
+    }, 100) // 100ms待機して動画の状態を安定させる
   }
 
   // URLが変更されたときに動画を再ロードし、メタデータを事前にロード
@@ -237,16 +269,31 @@ export default function CustomVideoPlayer({
     const video = videoRef.current
     if (!video || !url) return
     
-    // URLが実際に変更された場合のみ処理を実行
-    const currentSrc = video.src
-    const newSrc = url.startsWith('http') ? url : new URL(url, window.location.origin).href
+    // URLを正規化して比較
+    const normalizeUrl = (urlStr: string) => {
+      try {
+        if (urlStr.startsWith('http://') || urlStr.startsWith('https://')) {
+          return urlStr
+        }
+        return new URL(urlStr, window.location.origin).href
+      } catch {
+        return urlStr
+      }
+    }
     
-    if (currentSrc === newSrc) {
+    const currentSrc = video.src
+    const newSrc = normalizeUrl(url)
+    
+    // 既に同じURLがロードされている場合はスキップ
+    if (currentSrc && currentSrc === newSrc) {
       console.log('Video URL unchanged, skipping reload')
+      console.log('  Current:', currentSrc)
+      console.log('  New:', newSrc)
       return
     }
     
-    console.log('Loading new video:', url)
+    console.log('=== Loading new video ===')
+    console.log('URL prop:', url)
     console.log('Current src:', currentSrc)
     console.log('New src:', newSrc)
     
@@ -257,8 +304,18 @@ export default function CustomVideoPlayer({
       }
     }
     
+    const handleLoadStart = () => {
+      console.log('=== Video load started ===')
+    }
+    
+    const handleAbort = () => {
+      console.log('=== Video load aborted ===')
+    }
+    
     video.addEventListener('loadedmetadata', preloadMetadata)
     video.addEventListener('durationchange', preloadMetadata)
+    video.addEventListener('loadstart', handleLoadStart)
+    video.addEventListener('abort', handleAbort)
     
     // preload属性を設定してメタデータを積極的にロード
     video.preload = 'metadata'
@@ -273,14 +330,19 @@ export default function CustomVideoPlayer({
     setDuration(0)
     setIsPlaying(false)
     
-    // 新しいURLをロード
-    video.src = newSrc
-    video.load()
+    // 新しいURLをロード（srcが実際に異なる場合のみ）
+    if (!currentSrc || currentSrc !== newSrc) {
+      console.log('Setting new video source')
+      video.src = newSrc
+      video.load()
+    }
     
     // クリーンアップ
     return () => {
       video.removeEventListener('loadedmetadata', preloadMetadata)
       video.removeEventListener('durationchange', preloadMetadata)
+      video.removeEventListener('loadstart', handleLoadStart)
+      video.removeEventListener('abort', handleAbort)
     }
   }, [url])
 
