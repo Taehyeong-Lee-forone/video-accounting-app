@@ -180,10 +180,15 @@ async def verify_reset_token(token: str, db: Session = Depends(get_db)):
     """
     logger.info(f"トークン検証開始: token={token[:10] if token else 'None'}...")
     
-    # トークンでユーザーを検索
-    user = db.query(User).filter(
-        User.reset_token == token
-    ).first()
+    try:
+        # トークンでユーザーを検索
+        user = db.query(User).filter(
+            User.reset_token == token
+        ).first()
+    except Exception as e:
+        logger.error(f"データベースエラー: {e}")
+        # カラムが存在しない場合は、テーブル構造の問題
+        return {"valid": False, "message": "システムエラーが発生しました", "error": str(e)}
     
     if not user:
         logger.warning(f"トークンが見つかりません: token={token[:10] if token else 'None'}...")

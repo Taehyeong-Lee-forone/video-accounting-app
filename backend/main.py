@@ -178,7 +178,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": "1.0.1"}  # バージョン追加でリスタート強制
 
 @app.get("/db-info")
 async def database_info(db: Session = Depends(get_db)):
