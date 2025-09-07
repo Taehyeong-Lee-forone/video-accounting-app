@@ -72,12 +72,13 @@ export default function VideoUpload({ onUploadSuccess }: VideoUploadProps) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'video/*': ['.mp4', '.mov', '.avi', '.webm', '.mkv'],
-      'video/quicktime': ['.mov', '.qt'],  // QuickTime専用
-      'video/mp4': ['.mp4', '.m4v'],
-      'video/x-msvideo': ['.avi'],
+      'video/*': ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.MOV', '.MP4', '.AVI'],
+      'video/quicktime': ['.mov', '.qt', '.MOV'],  // QuickTime専用
+      'video/mp4': ['.mp4', '.m4v', '.MP4'],
+      'video/x-msvideo': ['.avi', '.AVI'],
       'video/webm': ['.webm'],
-      'video/x-matroska': ['.mkv']
+      'video/x-matroska': ['.mkv'],
+      'application/octet-stream': ['.mov', '.MOV']  // 一部のブラウザでMOVがこのMIMEタイプとして認識される
     },
     maxFiles: 1,
     disabled: uploading,

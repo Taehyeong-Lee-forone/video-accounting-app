@@ -113,9 +113,11 @@ async def upload_video(
         if not file.filename:
             raise HTTPException(400, "ファイル名が空です")
             
-        if not file.filename.endswith(('.mp4', '.mov', '.avi', '.webm', '.mkv')):
+        # 大文字小文字を無視して拡張子チェック
+        filename_lower = file.filename.lower()
+        if not filename_lower.endswith(('.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v', '.qt')):
             logger.error(f"サポートされていないファイル形式: {file.filename}")
-            raise HTTPException(400, "サポートされていないファイル形式です")
+            raise HTTPException(400, f"サポートされていないファイル形式です: {file.filename}")
         
         # ファイル保存 - Render環境では/tmpを使用
         base_dir = Path("/tmp") if os.getenv("RENDER") == "true" else Path("uploads")
