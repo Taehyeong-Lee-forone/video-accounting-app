@@ -639,7 +639,7 @@ class VisionOCRService:
                 "tax_rate": receipt_data.get('tax_rate', 0.10),
                 "line_items": [],  # Vision APIでは詳細品目抽出が難しい
                 "payment_method": payment,
-                "memo": f"OCR by Vision API",
+                "memo": "",  # メモは空欄に設定
                 "raw_ocr_text": receipt_data.get('raw_text', '')
             }
             
