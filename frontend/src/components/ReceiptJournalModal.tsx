@@ -41,6 +41,8 @@ export default function ReceiptJournalModal({
   const [isLoadingFrame, setIsLoadingFrame] = useState(false)
   const hiddenVideoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [videoLoaded, setVideoLoaded] = useState(false)
+  const [videoUrl, setVideoUrl] = useState<string>('')
   const [currentFrameUrl, setCurrentFrameUrl] = useState<string>('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [ocrPreviewData, setOcrPreviewData] = useState<any>(null)
@@ -112,79 +114,92 @@ export default function ReceiptJournalModal({
     }
   }, [journal])
   
-  // ビデオをロードして初期フレームを表示
+  // ビデオをロードしてビデオを準備
   useEffect(() => {
-    if (isOpen && videoId && hiddenVideoRef.current) {
-      const video = hiddenVideoRef.current
+    if (isOpen && videoId) {
+      console.log('🎬 Loading video for modal, videoId:', videoId)
+      setVideoLoaded(false)
       
-      // ビデオファイル名を取得（videosテーブルのlocal_pathから）
+      // ビデオ情報を取得
       api.get(`/videos/${videoId}`).then(response => {
         const videoPath = response.data.local_path
         const filename = videoPath?.split('/').pop()
         if (filename) {
-          const videoUrl = `${API_URL}/videos/stream/${filename}`
-          
-          // ビデオのURLが変わった場合のみ再ロード
-          if (video.src !== videoUrl) {
-            video.src = videoUrl
-            video.load()
-          }
-          
-          // メタデータがロードされたら初期位置にシーク
-          video.onloadedmetadata = () => {
-            if (receipt?.best_frame?.time_ms !== undefined) {
-              video.currentTime = receipt.best_frame.time_ms / 1000
-              // シーク完了後にフレームをキャプチャ
-              video.onseeked = () => {
-                captureVideoFrame()
-              }
-            }
-          }
+          const url = `${API_URL}/videos/stream/${filename}`
+          console.log('🎬 Video URL:', url)
+          setVideoUrl(url)
         }
       }).catch(error => {
         console.error('Failed to get video info:', error)
       })
     }
-    
-    // 初期画像がある場合はcanvasに描画
-    if (isOpen && !hiddenVideoRef.current?.src && receipt?.best_frame?.id && canvasRef.current) {
-      const img = new Image()
-      img.onload = () => {
-        const canvas = canvasRef.current
-        if (canvas) {
-          const ctx = canvas.getContext('2d')
-          if (ctx) {
-            canvas.width = img.width
-            canvas.height = img.height
-            ctx.drawImage(img, 0, 0)
-          }
+  }, [isOpen, videoId])
+  
+  // ビデオURLが設定されたらビデオをロード
+  useEffect(() => {
+    if (videoUrl && hiddenVideoRef.current) {
+      const video = hiddenVideoRef.current
+      console.log('🎬 Setting video src:', videoUrl)
+      
+      video.src = videoUrl
+      video.crossOrigin = 'anonymous'
+      
+      // ビデオが完全にロードされたら
+      video.oncanplaythrough = () => {
+        console.log('🎬 Video can play through!')
+        setVideoLoaded(true)
+        
+        // 初期位置にシーク
+        if (receipt?.best_frame?.time_ms !== undefined) {
+          video.currentTime = receipt.best_frame.time_ms / 1000
+          setTimeout(() => captureVideoFrame(), 100)
         }
       }
-      img.src = `${API_URL}/videos/frames/${receipt.best_frame.id}/image`
+      
+      video.onerror = (e) => {
+        console.error('🎬 Video loading error:', e)
+      }
+      
+      video.load()
     }
-  }, [isOpen, videoId, receipt, captureVideoFrame])
+  }, [videoUrl, receipt, captureVideoFrame])
 
-  // ビデオフレームをcanvasにキャプチャ
+  // ビデオフレームをcanvasにキャプチャ（最適化版）
   const captureVideoFrame = useCallback(() => {
-    if (!hiddenVideoRef.current || !canvasRef.current) return
+    if (!hiddenVideoRef.current || !canvasRef.current) {
+      console.warn('⚠️ Cannot capture frame: refs not ready')
+      return
+    }
     
     const video = hiddenVideoRef.current
     const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
     
+    // ビデオが準備できているか確認
+    if (video.readyState < 2) {
+      console.warn('⚠️ Video not ready for capture, readyState:', video.readyState)
+      return
+    }
+    
+    const ctx = canvas.getContext('2d', { alpha: false })
     if (!ctx) return
     
-    // canvasサイズをビデオサイズに合わせる
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
+    // canvasサイズを一度だけ設定
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+      canvas.width = video.videoWidth || 800
+      canvas.height = video.videoHeight || 600
+    }
     
-    // ビデオフレームをcanvasに描画
+    // ビデオフレームを即座に描画
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    console.log('📸 Frame captured at', video.currentTime, 'seconds')
   }, [])
 
   // フレームナビゲーション関数（ビデオ直接制御版）
   const handleFrameNavigation = (direction: 'prev' | 'next', stepSize: 'frame' | 'second' | 'halfSecond' = 'frame') => {
-    if (!hiddenVideoRef.current) return
+    if (!hiddenVideoRef.current || !videoLoaded) {
+      console.warn('⚠️ Video not ready:', { videoRef: !!hiddenVideoRef.current, videoLoaded })
+      return
+    }
     
     const video = hiddenVideoRef.current
     
@@ -199,12 +214,16 @@ export default function ReceiptJournalModal({
       ? video.currentTime + step
       : Math.max(0, video.currentTime - step)
     
+    console.log(`🎬 Seeking from ${video.currentTime}s to ${newTime}s`)
+    
     // ビデオの再生位置を即座に変更
     video.currentTime = newTime
     setCurrentFrameTime(Math.round(newTime * 1000))
     
-    // フレームをキャプチャ
-    captureVideoFrame()
+    // フレームを即座にキャプチャ（遅延なし）
+    requestAnimationFrame(() => {
+      captureVideoFrame()
+    })
     
     const stepLabel = stepSize === 'frame' ? 'フレーム' : '秒'
     console.log(`${direction === 'next' ? '次' : '前'}の${stepLabel}: ${newTime}s`)
@@ -952,8 +971,16 @@ export default function ReceiptJournalModal({
               ref={hiddenVideoRef}
               style={{ display: 'none' }}
               crossOrigin="anonymous"
-              preload="metadata"
+              preload="auto"
+              muted
             />
+            
+            {/* ビデオロード状態表示 */}
+            {!videoLoaded && (
+              <div className="absolute top-0 left-0 right-0 bg-yellow-100 text-yellow-800 text-xs p-1 text-center">
+                🎬 ビデオをロード中...
+              </div>
+            )}
             
             {/* Canvasでフレーム表示 */}
             {(
