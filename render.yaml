@@ -21,4 +21,20 @@ services:
         fromDatabase:
           name: video-accounting-db
           property: connectionString
+      
+      # Gmail SMTP 設定
+      - key: SMTP_HOST
+        value: "smtp.gmail.com"
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: "forone.video2@gmail.com"
+      - key: SMTP_PASSWORD
+        value: "ujqbdsagmerfbnvp"
+      - key: FROM_EMAIL
+        value: "forone.video2@gmail.com"
+      
+      # フロントエンドURL
+      - key: FRONTEND_URL
+        value: "https://video-accounting-app.vercel.app"
     autoDeploy: true

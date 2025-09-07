@@ -1,0 +1,26 @@
+# Render 환경 변수 설정 목록
+# Dashboard > Service > Environment > Add Environment Variable
+
+# Gmail SMTP 설정
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=forone.video2@gmail.com
+SMTP_PASSWORD=ujqbdsagmerfbnvp
+FROM_EMAIL=forone.video2@gmail.com
+
+# 프론트엔드 URL
+FRONTEND_URL=https://video-accounting-app.vercel.app
+
+# 기존 환경 변수 (이미 설정되어 있을 수 있음)
+DATABASE_URL=postgresql://... (Render가 자동 생성)
+SECRET_KEY=VP2_2UcE9rbbkjNZDbur6N4exSQSj2Izj1A_rEjRufg
+JWT_SECRET=VP2_2UcE9rbbkjNZDbur6N4exSQSj2Izj1A_rEjRufg
+
+# Supabase (이미 설정되어 있을 수 있음)
+STORAGE_TYPE=supabase
+SUPABASE_URL=https://cphbbpvhfbmwqkcrhhwm.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwaGJicHZoZmJtd3FrY3JoaHdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3ODA0MzksImV4cCI6MjA1MDM1NjQzOX0.5ivGPDz_7dTR_5q4dAjtEFMYGXKzfFPh94qQX_3CKnI
+SUPABASE_BUCKET=videos
+
+# Google Cloud (필요한 경우)
+# GOOGLE_APPLICATION_CREDENTIALS는 파일 경로가 아닌 JSON 내용을 직접 입력해야 함
