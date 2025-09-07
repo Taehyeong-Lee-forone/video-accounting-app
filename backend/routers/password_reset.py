@@ -118,12 +118,16 @@ async def reset_password(
     新しいパスワードを設定
     """
     try:
-        # トークンを検証
-        user = db.query(User).filter(
-            User.reset_token == request.token
-        ).first()
+        from sqlalchemy import text
         
-        if not user:
+        # トークンを検証（Raw SQL使用）
+        result = db.execute(text("""
+            SELECT id, email, reset_token_expires 
+            FROM users 
+            WHERE reset_token = :token
+        """), {"token": request.token}).first()
+        
+        if not result:
             logger.warning(f"トークンが見つかりません: token={request.token[:10] if request.token else 'None'}...")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -131,32 +135,37 @@ async def reset_password(
             )
         
         # 有効期限をチェック
-        if not user.reset_token_expires or datetime.now() > user.reset_token_expires:
+        if not result.reset_token_expires or datetime.now() > result.reset_token_expires:
             # 期限切れトークンをクリア
-            user.reset_token = None
-            user.reset_token_expires = None
+            db.execute(text("""
+                UPDATE users 
+                SET reset_token = NULL, reset_token_expires = NULL 
+                WHERE id = :user_id
+            """), {"user_id": result.id})
             db.commit()
-            logger.warning(f"トークン期限切れ: expires_at={user.reset_token_expires}")
+            logger.warning(f"トークン期限切れ: expires_at={result.reset_token_expires}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="トークンの有効期限が切れています"
             )
         
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="ユーザーが見つかりません"
-            )
+        # パスワードを更新（ハッシュ化）
+        hashed_password = pwd_context.hash(request.new_password)
         
-        # パスワードを更新
-        user.hashed_password = pwd_context.hash(request.new_password)
-        
-        # トークンをクリア
-        user.reset_token = None
-        user.reset_token_expires = None
+        # パスワード更新とトークンクリア
+        db.execute(text("""
+            UPDATE users 
+            SET hashed_password = :password,
+                reset_token = NULL, 
+                reset_token_expires = NULL 
+            WHERE id = :user_id
+        """), {
+            "password": hashed_password,
+            "user_id": result.id
+        })
         db.commit()
         
-        logger.info(f"パスワードリセット完了: {user.email}")
+        logger.info(f"パスワードリセット完了: {result.email}")
         
         return PasswordResetResponse(
             message="パスワードが正常に更新されました",
@@ -181,30 +190,39 @@ async def verify_reset_token(token: str, db: Session = Depends(get_db)):
     logger.info(f"トークン検証開始: token={token[:10] if token else 'None'}...")
     
     try:
-        # トークンでユーザーを検索
-        user = db.query(User).filter(
-            User.reset_token == token
-        ).first()
+        # Raw SQLを使用して直接クエリ（SQLAlchemyモデルの問題を回避）
+        from sqlalchemy import text
+        result = db.execute(text("""
+            SELECT id, email, reset_token, reset_token_expires 
+            FROM users 
+            WHERE reset_token = :token
+        """), {"token": token}).first()
+        
+        if not result:
+            logger.warning(f"トークンが見つかりません: token={token[:10] if token else 'None'}...")
+            return {"valid": False, "message": "無効なトークンです"}
+        
+        # タイムゾーン対応の期限チェック
+        from datetime import datetime
+        if not result.reset_token_expires or datetime.now() > result.reset_token_expires:
+            logger.warning(f"トークン期限切れ: expires_at={result.reset_token_expires}")
+            # 期限切れトークンをクリア
+            db.execute(text("""
+                UPDATE users 
+                SET reset_token = NULL, reset_token_expires = NULL 
+                WHERE id = :user_id
+            """), {"user_id": result.id})
+            db.commit()
+            return {"valid": False, "message": "トークンの有効期限が切れています"}
+        
+        logger.info(f"トークン有効: user_email={result.email}")
+        return {
+            "valid": True,
+            "email": result.email,
+            "message": "有効なトークンです"
+        }
+        
     except Exception as e:
         logger.error(f"データベースエラー: {e}")
-        # カラムが存在しない場合は、テーブル構造の問題
         return {"valid": False, "message": "システムエラーが発生しました", "error": str(e)}
     
-    if not user:
-        logger.warning(f"トークンが見つかりません: token={token[:10] if token else 'None'}...")
-        return {"valid": False, "message": "無効なトークンです"}
-    
-    if not user.reset_token_expires or datetime.now() > user.reset_token_expires:
-        # 期限切れトークンをクリア
-        logger.warning(f"トークン期限切れ: expires_at={user.reset_token_expires}, now={datetime.now()}")
-        user.reset_token = None
-        user.reset_token_expires = None
-        db.commit()
-        return {"valid": False, "message": "トークンの有効期限が切れています"}
-    
-    logger.info(f"トークン有効: user_email={user.email}")
-    return {
-        "valid": True,
-        "email": user.email,
-        "message": "有効なトークンです"
-    }
