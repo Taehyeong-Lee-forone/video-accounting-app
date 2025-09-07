@@ -1240,34 +1240,47 @@ export default function ReceiptJournalModal({
                               handleReceiptNavigation(r.id)
                             }}
                           >
-                            {/* シンプルなドットマーカー */}
+                            {/* シンプルなドットマーカー - 크기 증가 */}
                             <div className={`transition-all cursor-pointer ${
                               isCurrent 
-                                ? 'w-2.5 h-2.5 bg-amber-400 ring-4 ring-amber-400/20 z-30' 
+                                ? 'w-4 h-4 bg-amber-400 ring-4 ring-amber-400/20 z-30' 
                                 : isConfirmed 
-                                ? 'w-2 h-2 bg-emerald-400 ring-2 ring-emerald-400/20 z-20 hover:ring-4' 
-                                : 'w-1.5 h-1.5 bg-gray-400 ring-1 ring-gray-400/20 z-10 hover:ring-2'
+                                ? 'w-3.5 h-3.5 bg-emerald-400 ring-2 ring-emerald-400/20 z-20 hover:ring-4' 
+                                : 'w-3 h-3 bg-gray-400 ring-1 ring-gray-400/20 z-10 hover:ring-2'
                             } rounded-full`} />
                             
-                            {/* ホバー時の情報 - ミニマル */}
-                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/marker:opacity-100 transition-all duration-300 pointer-events-none z-40">
-                              <div className="bg-slate-800/90 backdrop-blur-sm text-white text-xs px-2.5 py-1.5 rounded-lg whitespace-nowrap">
-                                <div className="font-medium">{r.vendor || '領収書'}</div>
-                                <div className="text-slate-300 font-light">¥{r.total?.toLocaleString()}</div>
+                            {/* ホバー時の情報 - 詳細表示 */}
+                            <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 opacity-0 group-hover/marker:opacity-100 transition-all duration-300 pointer-events-none z-40">
+                              <div className="bg-slate-800/95 backdrop-blur-sm text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap shadow-xl">
+                                <div className="font-medium text-sm mb-1">{r.vendor || '領収書'}</div>
+                                <div className="text-slate-300 font-light">金額: ¥{r.total?.toLocaleString()}</div>
+                                {r.tax > 0 && (
+                                  <div className="text-slate-400 text-[10px]">税額: ¥{r.tax?.toLocaleString()}</div>
+                                )}
+                                {r.issue_date && (
+                                  <div className="text-slate-400 text-[10px] mt-1">
+                                    {new Date(r.issue_date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
+                                  </div>
+                                )}
+                                <div className={`text-[10px] mt-1 ${
+                                  isConfirmed ? 'text-emerald-400' : 'text-amber-400'
+                                }`}>
+                                  {isConfirmed ? '✓ 確認済み' : '⚠ 未確認'}
+                                </div>
                               </div>
                             </div>
                           </div>
                         )
                       })}
                       
-                      {/* 現在位置ハンドル - スリム */}
+                      {/* 現在位置ハンドル - 크기 증가 */}
                       <div 
                         className="absolute top-1/2 -translate-y-1/2 transition-all duration-200 z-30"
                         style={{ 
                           left: `${Math.max(0, Math.min(100, ((Math.max(0, currentFrameTime) / 1000 / videoDuration) * 100)))}%`
                         }}
                       >
-                        <div className="w-3 h-3 bg-white rounded-full ring-2 ring-slate-800 -translate-x-1/2 hover:scale-125 transition-transform cursor-pointer" />
+                        <div className="w-4 h-4 bg-white rounded-full ring-2 ring-slate-800 -translate-x-1/2 hover:scale-125 transition-transform cursor-pointer shadow-md" />
                       </div>
                       
                       {/* ホバー位置インジケーター */}
@@ -1280,18 +1293,18 @@ export default function ReceiptJournalModal({
                     </div>
                   </div>
                   
-                  {/* 凡例 - ミニマル */}
+                  {/* 凡例 - 마커 크기 일치 */}
                   <div className="flex items-center gap-6 mt-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
+                      <div className="w-2.5 h-2.5 bg-amber-400 rounded-full" />
                       <span className="text-xs text-gray-500 font-light">現在</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                      <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full" />
                       <span className="text-xs text-gray-500 font-light">確認済</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
+                      <div className="w-2.5 h-2.5 bg-gray-400 rounded-full" />
                       <span className="text-xs text-gray-500 font-light">未確認</span>
                     </div>
                     {receipt.is_manual && (
