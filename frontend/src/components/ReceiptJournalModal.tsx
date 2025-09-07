@@ -479,6 +479,12 @@ export default function ReceiptJournalModal({
         // 既に analyze-image でOCR分析済みなので、save_mode を 'create_new' にして再度呼び出す
         const video = hiddenVideoRef.current
         const canvas = canvasRef.current
+        
+        if (!canvas || !video) {
+          toast.error('ビデオまたはキャンバスの初期化に失敗しました')
+          return
+        }
+        
         const ctx = canvas.getContext('2d')
         
         if (!ctx) {
