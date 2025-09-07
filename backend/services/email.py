@@ -185,7 +185,7 @@ class EmailService:
                     
                     <div class="footer">
                         <p>このメールは自動送信されています。返信はできません。</p>
-                        <p>&copy; 2024 {self.app_name}. All rights reserved.</p>
+                        <p>&copy; {datetime.now().year} {self.app_name}. All rights reserved.</p>
                     </div>
                 </div>
             </div>

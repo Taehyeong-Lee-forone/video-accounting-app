@@ -294,3 +294,23 @@ class Rule(Base):
         Index("idx_rule_priority", "priority"),
         Index("idx_rule_active", "is_active"),
     )
+
+# パスワードリセットトークン
+class PasswordResetToken(Base):
+    """パスワードリセットトークンテーブル"""
+    __tablename__ = "password_reset_tokens"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    token = Column(String(255), unique=True, index=True, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # リレーション
+    user = relationship("User", backref="reset_tokens")
+    
+    __table_args__ = (
+        Index("idx_reset_token", "token"),
+        Index("idx_reset_token_expires", "expires_at"),
+    )

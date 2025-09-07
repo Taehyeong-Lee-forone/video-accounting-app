@@ -3,6 +3,7 @@ SendGridを使用したメール送信サービス
 """
 import os
 import logging
+from datetime import datetime
 from typing import Optional
 from dotenv import load_dotenv
 
@@ -124,7 +125,7 @@ class SendGridEmailService:
                     
                     <div class="footer">
                         <p>このメールは自動送信されています。</p>
-                        <p>&copy; 2024 {self.from_name}. All rights reserved.</p>
+                        <p>&copy; {datetime.now().year} {self.from_name}. All rights reserved.</p>
                     </div>
                 </div>
             </div>

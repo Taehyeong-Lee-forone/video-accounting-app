@@ -10,7 +10,7 @@ import logging
 from typing import Optional
 
 from database import get_db
-from models import User
+from models import User, PasswordResetToken
 from services.email import email_service
 from passlib.context import CryptContext
 
@@ -18,9 +18,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# リセットトークンを一時保存（本番環境ではRedisやDBを使用）
-reset_tokens = {}
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
@@ -53,15 +50,26 @@ async def forgot_password(
                 success=True
             )
         
+        # 既存の未使用トークンを無効化
+        existing_tokens = db.query(PasswordResetToken).filter(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used == False,
+            PasswordResetToken.expires_at > datetime.now()
+        ).all()
+        for token in existing_tokens:
+            token.used = True
+        
         # リセットトークンを生成
         reset_token = secrets.token_urlsafe(32)
         
-        # トークンを保存（24時間有効）
-        reset_tokens[reset_token] = {
-            "user_id": user.id,
-            "email": user.email,
-            "expires_at": datetime.now() + timedelta(hours=24)
-        }
+        # トークンをデータベースに保存（24時間有効）
+        token_record = PasswordResetToken(
+            user_id=user.id,
+            token=reset_token,
+            expires_at=datetime.now() + timedelta(hours=24)
+        )
+        db.add(token_record)
+        db.commit()
         
         # メール送信を試みる
         email_sent = False
@@ -122,25 +130,29 @@ async def reset_password(
     """
     try:
         # トークンを検証
-        token_data = reset_tokens.get(request.token)
+        token_record = db.query(PasswordResetToken).filter(
+            PasswordResetToken.token == request.token,
+            PasswordResetToken.used == False
+        ).first()
         
-        if not token_data:
+        if not token_record:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="無効なトークンです"
             )
         
         # 有効期限をチェック
-        if datetime.now() > token_data["expires_at"]:
-            # 期限切れトークンを削除
-            del reset_tokens[request.token]
+        if datetime.now() > token_record.expires_at:
+            # 期限切れトークンを使用済みにマーク
+            token_record.used = True
+            db.commit()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="トークンの有効期限が切れています"
             )
         
         # ユーザーを取得
-        user = db.query(User).filter(User.id == token_data["user_id"]).first()
+        user = db.query(User).filter(User.id == token_record.user_id).first()
         
         if not user:
             raise HTTPException(
@@ -150,10 +162,10 @@ async def reset_password(
         
         # パスワードを更新
         user.hashed_password = pwd_context.hash(request.new_password)
-        db.commit()
         
-        # 使用済みトークンを削除
-        del reset_tokens[request.token]
+        # トークンを使用済みにマーク
+        token_record.used = True
+        db.commit()
         
         logger.info(f"パスワードリセット完了: {user.email}")
         
@@ -173,21 +185,26 @@ async def reset_password(
         )
 
 @router.get("/api/auth/verify-reset-token")
-async def verify_reset_token(token: str):
+async def verify_reset_token(token: str, db: Session = Depends(get_db)):
     """
     リセットトークンの有効性を確認
     """
-    token_data = reset_tokens.get(token)
+    token_record = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token == token,
+        PasswordResetToken.used == False
+    ).first()
     
-    if not token_data:
+    if not token_record:
         return {"valid": False, "message": "無効なトークンです"}
     
-    if datetime.now() > token_data["expires_at"]:
-        del reset_tokens[token]
+    if datetime.now() > token_record.expires_at:
+        # 期限切れトークンを使用済みにマーク
+        token_record.used = True
+        db.commit()
         return {"valid": False, "message": "トークンの有効期限が切れています"}
     
     return {
         "valid": True,
-        "email": token_data["email"],
+        "email": token_record.user.email,
         "message": "有効なトークンです"
     }
