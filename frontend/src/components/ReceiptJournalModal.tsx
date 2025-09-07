@@ -1190,7 +1190,7 @@ export default function ReceiptJournalModal({
                     )}
                     
                     <div 
-                      className="relative h-1 bg-gray-200/60 rounded-full overflow-hidden cursor-pointer group-hover:h-1.5 transition-all duration-300"
+                      className="relative h-2 bg-gray-200/60 rounded-full overflow-visible cursor-pointer group-hover:h-2.5 transition-all duration-300"
                       onMouseMove={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect()
                         const x = e.clientX - rect.left
@@ -1239,14 +1239,26 @@ export default function ReceiptJournalModal({
                               handleReceiptNavigation(r.id)
                             }}
                           >
-                            {/* シンプルなドットマーカー - 크기 증가 */}
-                            <div className={`transition-all cursor-pointer ${
-                              isCurrent 
-                                ? 'w-4 h-4 bg-amber-400 ring-4 ring-amber-400/20 z-30' 
-                                : isConfirmed 
-                                ? 'w-3.5 h-3.5 bg-emerald-400 ring-2 ring-emerald-400/20 z-20 hover:ring-4' 
-                                : 'w-3 h-3 bg-gray-400 ring-1 ring-gray-400/20 z-10 hover:ring-2'
-                            } rounded-full`} />
+                            {/* タイムスタンプ位置の強調マーカー */}
+                            <div className="relative">
+                              {/* 垂直線 - タイムスタンプ位置を強調 */}
+                              <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-0.5 transition-all ${
+                                isCurrent 
+                                  ? 'h-8 -top-3 bg-amber-400/40' 
+                                  : isConfirmed 
+                                  ? 'h-6 -top-2 bg-emerald-400/30 hover:bg-emerald-400/50' 
+                                  : 'h-5 -top-1.5 bg-gray-400/20 hover:bg-gray-400/40'
+                              }`} />
+                              
+                              {/* マーカー本体 - より目立つデザイン */}
+                              <div className={`relative transition-all cursor-pointer ${
+                                isCurrent 
+                                  ? 'w-5 h-5 bg-amber-400 ring-4 ring-amber-400/30 shadow-lg shadow-amber-400/30 z-30' 
+                                  : isConfirmed 
+                                  ? 'w-4 h-4 bg-emerald-400 ring-3 ring-emerald-400/25 shadow-md shadow-emerald-400/20 z-20 hover:ring-4 hover:shadow-lg' 
+                                  : 'w-3.5 h-3.5 bg-gray-500 ring-2 ring-gray-400/20 shadow-sm z-10 hover:ring-3 hover:shadow-md'
+                              } rounded-full`} />
+                            </div>
                             
                             {/* ホバー時の情報 - 詳細表示 */}
                             <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 opacity-0 group-hover/marker:opacity-100 transition-all duration-300 pointer-events-none z-40">
@@ -1294,12 +1306,8 @@ export default function ReceiptJournalModal({
                     </div>
                   </div>
                   
-                  {/* 凡例 - 마커 크기 일치 */}
+                  {/* 凡例 - 選択中 삭제 */}
                   <div className="flex items-center gap-6 mt-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 bg-amber-400 rounded-full" />
-                      <span className="text-xs text-gray-500 font-light">選択中</span>
-                    </div>
                     <div className="flex items-center gap-2">
                       <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full" />
                       <span className="text-xs text-gray-500 font-light">確認済</span>
