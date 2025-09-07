@@ -1134,124 +1134,204 @@ export default function ReceiptJournalModal({
               </div>
             )}
             <div className="px-1 pb-1">
-              {/* タイムライン表示 */}
+              {/* タイムライン表示 - モダンUI */}
               {videoDuration > 0 && (
-                <div className="bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-2 border border-gray-200">
-                  <div className="flex items-center justify-between text-xs text-gray-700 mb-1">
-                    <span className="font-medium">0.0s</span>
-                    <span className="font-bold text-sm text-blue-600">
-                      {(Math.max(0, currentFrameTime) / 1000).toFixed(1)}s
-                    </span>
-                    <span className="font-medium">{videoDuration.toFixed(1)}s</span>
+                <div className="bg-gradient-to-b from-slate-900 to-slate-800 rounded-xl p-3 shadow-2xl">
+                  {/* 時間表示ヘッダー */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                      <span className="text-xs font-medium text-gray-400">タイムライン</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-500 font-mono">0:00</span>
+                      <div className="px-3 py-1 bg-blue-500/20 rounded-full border border-blue-500/30">
+                        <span className="text-sm font-bold text-blue-400 font-mono">
+                          {Math.floor(currentFrameTime / 1000 / 60).toString().padStart(1, '0')}:{((currentFrameTime / 1000) % 60).toFixed(1).padStart(4, '0')}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-500 font-mono">
+                        {Math.floor(videoDuration / 60)}:{(videoDuration % 60).toFixed(0).padStart(2, '0')}
+                      </span>
+                    </div>
                   </div>
                   
-                  {/* タイムラインバー */}
-                  <div 
-                    className="relative h-6 bg-gradient-to-r from-gray-200 to-gray-300 rounded-lg overflow-hidden shadow-inner cursor-pointer group"
-                    onClick={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect()
-                      const x = e.clientX - rect.left
-                      const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100))
-                      const newTime = Math.floor((percentage / 100) * videoDuration * 1000)
-                      setCurrentFrameTime(newTime)
-                      // ビデオシーク
-                      if (hiddenVideoRef.current && videoLoaded) {
-                        hiddenVideoRef.current.currentTime = newTime / 1000
-                        // seekedイベントでキャプチャされる
-                      }
-                    }}
-                  >
-                    {/* 背景グラデーション効果 */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/10 to-transparent pointer-events-none" />
-                    
-                    {/* プログレスバー（現在位置まで） */}
+                  {/* メインタイムラインバー */}
+                  <div className="relative group">
+                    {/* ホバー時の時間プレビュー */}
                     <div 
-                      className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-200 shadow-sm"
+                      className="absolute -top-8 left-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20"
                       style={{ 
-                        width: `${Math.max(0, Math.min(100, ((Math.max(0, currentFrameTime) / 1000 / videoDuration) * 100)))}%` 
+                        left: 'var(--hover-position, 0%)',
+                        transform: 'translateX(-50%)'
                       }}
                     >
-                      {/* プログレスバーの光沢効果 */}
-                      <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
+                      <div className="bg-gray-900 text-white text-xs px-2 py-1 rounded-md shadow-lg">
+                        <div className="font-mono hover-time">0:00</div>
+                        <div className="absolute w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-gray-900 left-1/2 -translate-x-1/2 -bottom-1" />
+                      </div>
                     </div>
                     
-                    {/* 他の領収書マーカー */}
-                    {localReceipts.map((r: any) => {
-                      if (r.id === receipt?.id) return null
-                      const position = Math.max(0, Math.min(100, ((r.best_frame?.time_ms || 0) / 1000 / videoDuration) * 100))
-                      return (
-                        <div
-                          key={r.id}
-                          className="absolute top-1 bottom-1 w-1 bg-gray-600/60 rounded-full hover:bg-gray-700 hover:scale-x-150 transition-all cursor-pointer"
-                          style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleReceiptNavigation(r.id)
-                          }}
-                          title={`${r.vendor || '不明'} - ${((r.best_frame?.time_ms || 0) / 1000).toFixed(1)}秒`}
-                        >
-                          {/* ホバー時のハイライト */}
-                          <div className="absolute inset-0 bg-yellow-400/50 rounded-full scale-0 group-hover:scale-150 transition-transform" />
-                        </div>
-                      )
-                    })}
-                    
-                    {/* 現在の領収書の元の位置インジケーター */}
-                    {receipt?.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== currentFrameTime && (
+                    <div 
+                      className="relative h-12 bg-gradient-to-b from-gray-900 to-gray-800 rounded-lg overflow-hidden cursor-pointer shadow-inner"
+                      onMouseMove={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        const x = e.clientX - rect.left
+                        const percentage = (x / rect.width) * 100
+                        e.currentTarget.style.setProperty('--hover-position', `${percentage}%`)
+                        const hoverTime = (percentage / 100) * videoDuration
+                        const hoverTimeEl = e.currentTarget.querySelector('.hover-time') as HTMLElement
+                        if (hoverTimeEl) {
+                          hoverTimeEl.textContent = `${Math.floor(hoverTime / 60)}:${(hoverTime % 60).toFixed(1).padStart(4, '0')}`
+                        }
+                      }}
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        const x = e.clientX - rect.left
+                        const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100))
+                        const newTime = Math.floor((percentage / 100) * videoDuration * 1000)
+                        setCurrentFrameTime(newTime)
+                        // ビデオシーク
+                        if (hiddenVideoRef.current && videoLoaded) {
+                          hiddenVideoRef.current.currentTime = newTime / 1000
+                          // seekedイベントでキャプチャされる
+                        }
+                      }}
+                    >
+                      {/* 波形風の背景パターン */}
+                      <div className="absolute inset-0 opacity-20">
+                        <svg className="w-full h-full" preserveAspectRatio="none">
+                          <defs>
+                            <pattern id="waveform" x="0" y="0" width="4" height="100%" patternUnits="userSpaceOnUse">
+                              <rect x="1" y="30%" width="2" height="40%" fill="#4B5563" />
+                            </pattern>
+                          </defs>
+                          <rect width="100%" height="100%" fill="url(#waveform)" />
+                        </svg>
+                      </div>
+                      
+                      {/* バッファ済み範囲（薄いグレー） */}
+                      <div className="absolute top-0 left-0 h-full bg-white/5" style={{ width: '100%' }} />
+                      
+                      {/* プログレスバー（グラデーション） */}
                       <div 
-                        className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-blue-300 rounded-full border border-blue-500 opacity-50"
+                        className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 shadow-lg transition-all duration-100"
                         style={{ 
-                          left: `${Math.max(0, Math.min(100, ((receipt.best_frame.time_ms / 1000 / videoDuration) * 100)))}%`
+                          width: `${Math.max(0, Math.min(100, ((Math.max(0, currentFrameTime) / 1000 / videoDuration) * 100)))}%` 
                         }}
-                        title="元の位置"
-                      />
-                    )}
-                    
-                    {/* 現在位置マーカー（ドラッグ可能風の見た目） */}
-                    <div 
-                      className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full border-2 border-blue-600 shadow-lg hover:scale-110 transition-transform cursor-grab active:cursor-grabbing z-10"
-                      style={{ 
-                        left: `${Math.max(0, Math.min(100, ((Math.max(0, currentFrameTime) / 1000 / videoDuration) * 100)))}%`,
-                        transform: 'translate(-50%, -50%)'
-                      }}
-                    >
-                      {/* 内側の点 */}
-                      <div className="absolute inset-1 bg-blue-600 rounded-full" />
-                    </div>
-                    
-                    {/* ホバー時の時間表示 */}
-                    <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-0.5 rounded whitespace-nowrap">
-                        クリックで移動
+                      >
+                        {/* アニメーション光沢効果 */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-white/30 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
                       </div>
-                    </div>
-                  </div>
-                  
-                  {/* 補助情報 */}
-                  <div className="flex items-center justify-between mt-1">
-                    <div className="flex items-center gap-2 text-xs">
-                      <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 bg-gray-600/60 rounded-full" />
-                        <span className="text-gray-700">他の領収書</span>
-                      </div>
-                      {receipt?.best_frame?.time_ms !== undefined && receipt.best_frame.time_ms !== currentFrameTime && (
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 bg-blue-300 rounded-full border border-blue-500" />
-                          <span className="text-gray-700">元の位置</span>
+                      
+                      {/* 領収書マーカー（ダイヤモンド型） */}
+                      {localReceipts.map((r: any) => {
+                        if (r.id === receipt?.id) return null
+                        const position = Math.max(0, Math.min(100, ((r.best_frame?.time_ms || 0) / 1000 / videoDuration) * 100))
+                        const isConfirmed = allJournals.find((j: any) => j.receipt_id === r.id)?.status === 'confirmed'
+                        return (
+                          <div
+                            key={r.id}
+                            className="absolute top-1/2 -translate-y-1/2 group/marker"
+                            style={{ left: `${position}%` }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleReceiptNavigation(r.id)
+                            }}
+                          >
+                            {/* マーカー本体 */}
+                            <div className={`w-2 h-2 rotate-45 transform transition-all cursor-pointer hover:scale-150 ${
+                              isConfirmed ? 'bg-green-400 shadow-green-400/50' : 'bg-yellow-400 shadow-yellow-400/50'
+                            } shadow-lg`} />
+                            
+                            {/* ホバー時のツールチップ */}
+                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/marker:opacity-100 transition-opacity pointer-events-none">
+                              <div className="bg-gray-900 text-white text-xs px-2 py-1 rounded-md shadow-lg whitespace-nowrap">
+                                <div className="font-medium">{r.vendor || '不明'}</div>
+                                <div className="text-gray-400">¥{r.total?.toLocaleString() || 0}</div>
+                                <div className="text-gray-500">{((r.best_frame?.time_ms || 0) / 1000).toFixed(1)}s</div>
+                              </div>
+                              <div className="absolute w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-gray-900 left-1/2 -translate-x-1/2 -bottom-1" />
+                            </div>
+                          </div>
+                        )
+                      })}
+                      
+                      {/* 現在の領収書の元の位置 */}
+                      {receipt?.best_frame?.time_ms !== undefined && Math.abs(receipt.best_frame.time_ms - currentFrameTime) > 100 && (
+                        <div 
+                          className="absolute top-1/2 -translate-y-1/2"
+                          style={{ 
+                            left: `${Math.max(0, Math.min(100, ((receipt.best_frame.time_ms / 1000 / videoDuration) * 100)))}%`
+                          }}
+                        >
+                          <div className="w-1.5 h-1.5 bg-blue-300/50 rounded-full animate-pulse" />
                         </div>
                       )}
+                      
+                      {/* 現在位置スライダー（YouTube風） */}
+                      <div 
+                        className="absolute top-0 h-full w-1 bg-white transition-all"
+                        style={{ 
+                          left: `${Math.max(0, Math.min(100, ((Math.max(0, currentFrameTime) / 1000 / videoDuration) * 100)))}%`,
+                          transform: 'translateX(-50%)'
+                        }}
+                      >
+                        {/* スライダーハンドル */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                          <div className="w-4 h-4 bg-white rounded-full shadow-xl hover:scale-125 transition-transform cursor-ew-resize">
+                            <div className="absolute inset-0 bg-white rounded-full animate-ping opacity-75" />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* ホバー時の垂直ライン */}
+                      <div 
+                        className="absolute top-0 h-full w-px bg-white/30 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                        style={{ 
+                          left: 'var(--hover-position, 0%)'
+                        }}
+                      />
                     </div>
-                    {receipt.is_manual && (
-                      <span className="text-xs text-green-600 font-medium">手動追加</span>
-                    )}
+                  </div>
+                  
+                  {/* レジェンド（下部） */}
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rotate-45 bg-yellow-400" />
+                        <span className="text-xs text-gray-400">未確認</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rotate-45 bg-green-400" />
+                        <span className="text-xs text-gray-400">確認済</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {receipt.is_manual && (
+                        <span className="px-2 py-0.5 bg-blue-500/20 rounded-full text-xs text-blue-400 border border-blue-500/30">
+                          手動追加
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-500">
+                        {localReceipts.length}件の領収書
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
               
-              {/* 既存の時間情報 */}
-              {receipt.is_manual && (
-                <div className="text-xs text-blue-600 text-center mt-1">手動追加</div>
-              )}
+              {/* 追加のスタイル定義 */}
+              <style jsx>{`
+                @keyframes shimmer {
+                  0% { transform: translateX(-100%); }
+                  100% { transform: translateX(200%); }
+                }
+                .animate-shimmer {
+                  animation: shimmer 2s infinite;
+                }
+              `}</style>
             </div>
           </div>
 
