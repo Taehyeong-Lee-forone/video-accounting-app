@@ -114,6 +114,36 @@ export default function ReceiptJournalModal({
     }
   }, [journal])
   
+  // ビデオフレームをcanvasにキャプチャ（最適化版）
+  const captureVideoFrame = useCallback(() => {
+    if (!hiddenVideoRef.current || !canvasRef.current) {
+      console.warn('⚠️ Cannot capture frame: refs not ready')
+      return
+    }
+    
+    const video = hiddenVideoRef.current
+    const canvas = canvasRef.current
+    
+    // ビデオが準備できているか確認
+    if (video.readyState < 2) {
+      console.warn('⚠️ Video not ready for capture, readyState:', video.readyState)
+      return
+    }
+    
+    const ctx = canvas.getContext('2d', { alpha: false })
+    if (!ctx) return
+    
+    // canvasサイズを一度だけ設定
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+      canvas.width = video.videoWidth || 800
+      canvas.height = video.videoHeight || 600
+    }
+    
+    // ビデオフレームを即座に描画
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    console.log('📸 Frame captured at', video.currentTime, 'seconds')
+  }, [])
+  
   // ビデオをロードしてビデオを準備
   useEffect(() => {
     if (isOpen && videoId) {
@@ -163,36 +193,6 @@ export default function ReceiptJournalModal({
       video.load()
     }
   }, [videoUrl, receipt, captureVideoFrame])
-
-  // ビデオフレームをcanvasにキャプチャ（最適化版）
-  const captureVideoFrame = useCallback(() => {
-    if (!hiddenVideoRef.current || !canvasRef.current) {
-      console.warn('⚠️ Cannot capture frame: refs not ready')
-      return
-    }
-    
-    const video = hiddenVideoRef.current
-    const canvas = canvasRef.current
-    
-    // ビデオが準備できているか確認
-    if (video.readyState < 2) {
-      console.warn('⚠️ Video not ready for capture, readyState:', video.readyState)
-      return
-    }
-    
-    const ctx = canvas.getContext('2d', { alpha: false })
-    if (!ctx) return
-    
-    // canvasサイズを一度だけ設定
-    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-      canvas.width = video.videoWidth || 800
-      canvas.height = video.videoHeight || 600
-    }
-    
-    // ビデオフレームを即座に描画
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    console.log('📸 Frame captured at', video.currentTime, 'seconds')
-  }, [])
 
   // フレームナビゲーション関数（ビデオ直接制御版）
   const handleFrameNavigation = (direction: 'prev' | 'next', stepSize: 'frame' | 'second' | 'halfSecond' = 'frame') => {
