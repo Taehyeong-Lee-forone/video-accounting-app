@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 
 class EmailService:
     def __init__(self):
+        # SendGrid設定を優先
+        self.sendgrid_api_key = os.getenv("SENDGRID_API_KEY", "")
+        self.use_sendgrid = bool(self.sendgrid_api_key)
+        
         # Gmail設定（環境変数から取得）
         self.smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
@@ -24,7 +28,7 @@ class EmailService:
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")  # アプリパスワード
         
         # Render環境で環境変数が取得できない場合の強制設定
-        if not self.smtp_user and os.getenv("RENDER") == "true":
+        if not self.smtp_user and not self.use_sendgrid and os.getenv("RENDER") == "true":
             logger.warning("Render環境で環境変数が取得できません。ハードコード値を使用します。")
             self.smtp_host = "smtp.gmail.com"
             self.smtp_port = 587
@@ -36,16 +40,36 @@ class EmailService:
         self.app_name = "動画会計アプリ"
         self.app_url = os.getenv("FRONTEND_URL", "https://video-accounting-app.vercel.app")
         
+        # SendGrid初期化
+        if self.use_sendgrid:
+            try:
+                from .email_sendgrid import SendGridEmailService
+                self.sendgrid_service = SendGridEmailService()
+                logger.info("SendGridサービスを使用します")
+            except Exception as e:
+                logger.error(f"SendGrid初期化失敗: {e}")
+                self.use_sendgrid = False
+        
         # 初期化時に設定をログ出力
-        if self.smtp_user:
+        if self.use_sendgrid:
+            logger.info("EmailService初期化 - SendGridモード")
+        elif self.smtp_user:
             logger.info(f"EmailService初期化 - SMTP_HOST: {self.smtp_host}, SMTP_USER: {self.smtp_user[:10]}...")
         else:
-            logger.warning("EmailService初期化 - SMTP設定が見つかりません")
+            logger.warning("EmailService初期化 - メール設定が見つかりません")
         
     def send_email(self, to_email: str, subject: str, html_content: str, text_content: Optional[str] = None) -> bool:
         """
         メールを送信する
         """
+        # SendGridを優先的に使用
+        if self.use_sendgrid:
+            try:
+                return self.sendgrid_service.send_email(to_email, subject, html_content, text_content)
+            except Exception as e:
+                logger.error(f"SendGrid送信失敗、SMTPにフォールバック: {e}")
+        
+        # SMTP送信
         try:
             # メッセージの作成
             msg = MIMEMultipart('alternative')
