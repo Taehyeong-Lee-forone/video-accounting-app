@@ -96,7 +96,7 @@ async def create_tables():
     """
     try:
         from database import engine, Base
-        from models import User, PasswordResetToken  # 明示的にインポート
+        from models import User  # Userモデルのみインポート
         
         # テーブル作成
         Base.metadata.create_all(bind=engine, checkfirst=True)
