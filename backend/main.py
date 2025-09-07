@@ -31,6 +31,14 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine, checkfirst=True)
         logger.info("データベース初期化完了")
         
+        # マイグレーション実行（新しいカラムを追加）
+        try:
+            from migrate_db import add_reset_token_columns
+            add_reset_token_columns()
+            logger.info("マイグレーション完了")
+        except Exception as e:
+            logger.warning(f"マイグレーションスキップ: {e}")
+        
         # 初回起動時のadminユーザー作成
         from sqlalchemy.orm import Session
         from models import User  # Userモデルをインポート

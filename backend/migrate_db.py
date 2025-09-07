@@ -1,91 +1,82 @@
-#!/usr/bin/env python3
 """
 データベースマイグレーションスクリプト
-transaction_dateカラムをjournal_entriesテーブルに追加
+Userテーブルにreset_token, reset_token_expiresカラムを追加
 """
+from sqlalchemy import text
+from database import engine
+import logging
 
-import sqlite3
-import os
-from datetime import datetime
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def migrate_database():
-    """SQLiteデータベースにtransaction_dateカラムを追加"""
+def add_reset_token_columns():
+    """Userテーブルにパスワードリセット用カラムを追加"""
     
-    db_path = "video_accounting.db"
-    
-    if not os.path.exists(db_path):
-        print(f"データベースファイルが見つかりません: {db_path}")
-        return False
-    
-    try:
-        # データベース接続
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        # 現在のテーブル構造を確認
-        cursor.execute("PRAGMA table_info(journal_entries)")
-        columns = cursor.fetchall()
-        column_names = [col[1] for col in columns]
-        
-        print("現在のカラム:", column_names)
-        
-        # transaction_dateカラムが存在しない場合のみ追加
-        if 'transaction_date' not in column_names:
-            print("transaction_dateカラムを追加中...")
+    with engine.connect() as conn:
+        try:
+            # PostgreSQL用
+            if "postgresql" in str(engine.url) or "postgres" in str(engine.url):
+                logger.info("PostgreSQL: カラム追加開始")
+                
+                # reset_tokenカラムを追加（存在しない場合のみ）
+                conn.execute(text("""
+                    DO $$ 
+                    BEGIN 
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns 
+                            WHERE table_name='users' AND column_name='reset_token'
+                        ) THEN
+                            ALTER TABLE users ADD COLUMN reset_token VARCHAR(255);
+                            CREATE UNIQUE INDEX idx_users_reset_token ON users(reset_token);
+                        END IF;
+                    END $$;
+                """))
+                conn.commit()
+                
+                # reset_token_expiresカラムを追加（存在しない場合のみ）
+                conn.execute(text("""
+                    DO $$ 
+                    BEGIN 
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns 
+                            WHERE table_name='users' AND column_name='reset_token_expires'
+                        ) THEN
+                            ALTER TABLE users ADD COLUMN reset_token_expires TIMESTAMP WITH TIME ZONE;
+                        END IF;
+                    END $$;
+                """))
+                conn.commit()
+                
+                logger.info("PostgreSQL: カラム追加完了")
+                
+            # SQLite用
+            else:
+                logger.info("SQLite: カラム追加開始")
+                
+                # SQLiteではカラムの存在確認が異なる
+                result = conn.execute(text("PRAGMA table_info(users)"))
+                columns = [row[1] for row in result]
+                
+                if 'reset_token' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)"))
+                    conn.commit()
+                    logger.info("reset_tokenカラムを追加しました")
+                    
+                if 'reset_token_expires' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expires DATETIME"))
+                    conn.commit()
+                    logger.info("reset_token_expiresカラムを追加しました")
+                
+                logger.info("SQLite: カラム追加完了")
+                
+            return True
             
-            # SQLiteは ALTER TABLE ADD COLUMN で NOT NULL制約を直接追加できないため、
-            # まずNULL許可で追加し、既存データを更新してからNOT NULLにする
-            
-            # 1. カラムを追加（NULL許可）
-            cursor.execute("""
-                ALTER TABLE journal_entries 
-                ADD COLUMN transaction_date DATE
-            """)
-            
-            # 2. 既存のレコードを更新（issue_dateまたは現在の日付を使用）
-            cursor.execute("""
-                UPDATE journal_entries 
-                SET transaction_date = DATE(
-                    COALESCE(
-                        (SELECT issue_date FROM receipts WHERE receipts.id = journal_entries.receipt_id),
-                        CURRENT_DATE
-                    )
-                )
-                WHERE transaction_date IS NULL
-            """)
-            
-            conn.commit()
-            print("✅ transaction_dateカラムを正常に追加しました")
-            
-            # 追加後の確認
-            cursor.execute("PRAGMA table_info(journal_entries)")
-            columns = cursor.fetchall()
-            column_names = [col[1] for col in columns]
-            print("更新後のカラム:", column_names)
-            
-        else:
-            print("transaction_dateカラムは既に存在します")
-        
-        # テストクエリ実行
-        cursor.execute("SELECT COUNT(*) FROM journal_entries WHERE transaction_date IS NOT NULL")
-        count = cursor.fetchone()[0]
-        print(f"transaction_dateが設定されているレコード数: {count}")
-        
-        conn.close()
-        return True
-        
-    except sqlite3.Error as e:
-        print(f"データベースエラー: {e}")
-        return False
-    except Exception as e:
-        print(f"予期しないエラー: {e}")
-        return False
+        except Exception as e:
+            logger.error(f"カラム追加エラー: {e}")
+            return False
 
 if __name__ == "__main__":
-    print("データベースマイグレーション開始...")
-    success = migrate_database()
-    
-    if success:
-        print("✅ マイグレーション完了")
+    if add_reset_token_columns():
+        logger.info("✅ マイグレーション成功")
     else:
-        print("❌ マイグレーション失敗")
+        logger.error("❌ マイグレーション失敗")

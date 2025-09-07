@@ -89,6 +89,36 @@ async def list_users(db: Session = Depends(get_db)):
         logger.error(f"ユーザー一覧取得エラー: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/api/temp/check-user-schema")
+async def check_user_schema(db: Session = Depends(get_db)):
+    """
+    Userテーブルのスキーマを確認
+    """
+    try:
+        from sqlalchemy import inspect
+        from models import User
+        
+        # テーブルのカラム情報を取得
+        inspector = inspect(db.bind)
+        columns = inspector.get_columns('users')
+        
+        column_info = {col['name']: str(col['type']) for col in columns}
+        
+        # reset_token関連のカラムを確認
+        has_reset_token = 'reset_token' in column_info
+        has_reset_token_expires = 'reset_token_expires' in column_info
+        
+        return {
+            "table": "users",
+            "columns": column_info,
+            "has_reset_token": has_reset_token,
+            "has_reset_token_expires": has_reset_token_expires,
+            "total_columns": len(column_info)
+        }
+    except Exception as e:
+        logger.error(f"スキーマ確認エラー: {e}")
+        return {"error": str(e)}
+
 @router.get("/api/temp/create-tables")
 async def create_tables():
     """
