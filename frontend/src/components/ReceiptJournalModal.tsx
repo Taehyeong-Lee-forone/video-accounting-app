@@ -39,6 +39,7 @@ export default function ReceiptJournalModal({
   const [isConfirmed, setIsConfirmed] = useState(false)
   const [currentFrameTime, setCurrentFrameTime] = useState<number>(0)
   const [isLoadingFrame, setIsLoadingFrame] = useState(false)
+  const [preloadedImages, setPreloadedImages] = useState<Map<number, string>>(new Map())
   const [currentFrameUrl, setCurrentFrameUrl] = useState<string>('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [ocrPreviewData, setOcrPreviewData] = useState<any>(null)
@@ -81,6 +82,8 @@ export default function ReceiptJournalModal({
         if (receipt.best_frame?.time_ms !== undefined) {
           setCurrentFrameTime(receipt.best_frame.time_ms)
           setCurrentFrameUrl(`${API_URL}/videos/frames/${receipt.best_frame.id}/image`)
+          // 周辺フレームをプリロード
+          preloadFrameImages(receipt.best_frame.time_ms)
         }
       }
     }
@@ -104,12 +107,32 @@ export default function ReceiptJournalModal({
     }
   }, [journal])
 
-  // フレームナビゲーション関数
-  const handleFrameNavigation = (direction: 'prev' | 'next', stepSize: 'frame' | 'second' | 'halfSecond' = 'frame') => {
+  // フレームURLをプリロード
+  const preloadFrameImages = (currentTime: number) => {
     if (!videoId) return
     
-    // 既にローディング中なら重複実行を防止
-    if (isLoadingFrame) return
+    const times = [
+      currentTime - 1000,  // 1秒前
+      currentTime - 500,   // 0.5秒前
+      currentTime - 33,    // 1フレーム前
+      currentTime + 33,    // 1フレーム後
+      currentTime + 500,   // 0.5秒後
+      currentTime + 1000   // 1秒後
+    ].filter(t => t >= 0)  // 負の値を除外
+    
+    times.forEach(time => {
+      if (!preloadedImages.has(time)) {
+        const img = new Image()
+        img.src = `${API_URL}/videos/${videoId}/frame-at-time?time_ms=${time}`
+        // キャッシュに保存
+        setPreloadedImages(prev => new Map(prev).set(time, img.src))
+      }
+    })
+  }
+
+  // フレームナビゲーション関数（最適化版）
+  const handleFrameNavigation = (direction: 'prev' | 'next', stepSize: 'frame' | 'second' | 'halfSecond' = 'frame') => {
+    if (!videoId) return
     
     // 移動単位設定
     const step = stepSize === 'frame' 
@@ -131,15 +154,26 @@ export default function ReceiptJournalModal({
       return
     }
     
-    setIsLoadingFrame(true)
+    // キャッシュからURLを取得するか、新しく生成（タイムスタンプなし）
+    const cachedUrl = preloadedImages.get(newTime)
+    const newFrameUrl = cachedUrl || `${API_URL}/videos/${videoId}/frame-at-time?time_ms=${newTime}`
     
-    // 新しいフレーム画像URL生成（キャッシュ無効化のためのタイムスタンプ追加）
-    const timestamp = new Date().getTime()
-    const newFrameUrl = `${API_URL}/videos/${videoId}/frame-at-time?time_ms=${newTime}&t=${timestamp}`
+    // キャッシュにない場合のみローディング表示
+    if (!cachedUrl) {
+      setIsLoadingFrame(true)
+      // 新しい画像を読み込み
+      const img = new Image()
+      img.onload = () => setIsLoadingFrame(false)
+      img.onerror = () => setIsLoadingFrame(false)
+      img.src = newFrameUrl
+    }
     
-    // フレーム時間とURLを更新
+    // フレーム時間とURLを即座に更新
     setCurrentFrameTime(newTime)
     setCurrentFrameUrl(newFrameUrl)
+    
+    // 次のフレームをプリロード
+    preloadFrameImages(newTime)
     
     const stepLabel = stepSize === 'frame' ? 'フレーム' : '秒'
     console.log(`${direction === 'next' ? '次' : '前'}の${stepLabel}: ${newTime}ms`)
@@ -930,9 +964,10 @@ export default function ReceiptJournalModal({
                   }}
                   onMouseUp={() => setIsDragging(false)}
                   onMouseLeave={() => setIsDragging(false)}
-                  onLoad={() => setIsLoadingFrame(false)}
+                  onLoad={() => {
+                    // ローディング状態はhandleFrameNavigationで管理
+                  }}
                   onError={() => {
-                    setIsLoadingFrame(false)
                     toast.error('フレーム画像の読み込みに失敗しました')
                   }}
                 />
