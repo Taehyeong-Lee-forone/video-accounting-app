@@ -1569,18 +1569,45 @@ async def analyze_frame_at_time(
                 import time
                 import random
                 unique_suffix = f"_manual_{actual_time_ms}_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
-                receipt.vendor_norm = analyzer._normalize_text(receipt_data.get('vendor', '')) + unique_suffix
-                receipt.memo = f"手動追加 ({actual_time_ms}ms) - 再試行"
+                
+                # 新しいレシートオブジェクトを作成（古いものは破棄）
+                receipt = Receipt(
+                    video_id=video_id,
+                    best_frame_id=frame_obj.id,
+                    vendor=receipt_data.get('vendor'),
+                    vendor_norm=analyzer._normalize_text(receipt_data.get('vendor', '')) + unique_suffix,
+                    document_type=doc_type,
+                    issue_date=issue_date_value,
+                    currency=receipt_data.get('currency', 'JPY'),
+                    total=receipt_data.get('total'),
+                    subtotal=receipt_data.get('subtotal'),
+                    tax=receipt_data.get('tax'),
+                    tax_rate=receipt_data.get('tax_rate'),
+                    payment_method=payment_method,
+                    memo=f"手動追加 ({actual_time_ms}ms) - 再試行",
+                    is_manual=True
+                )
                 
                 try:
                     db.add(receipt)
                     db.commit()
                     db.refresh(receipt)
-                    logger.info(f"Manual receipt created with adjusted time: {receipt.id}")
+                    logger.info(f"Manual receipt created with adjusted suffix: {receipt.id}")
                 except Exception as e2:
                     db.rollback()
                     logger.error(f"Second attempt failed: {e2}")
-                    raise HTTPException(500, f"領収書の保存に失敗しました: {str(e2)}")
+                    # 既存のレシートがある可能性があるので、それを返す
+                    existing_receipt = db.query(Receipt).filter(
+                        Receipt.video_id == video_id,
+                        Receipt.vendor == receipt_data.get('vendor'),
+                        Receipt.total == receipt_data.get('total')
+                    ).first()
+                    
+                    if existing_receipt:
+                        logger.info(f"Found existing receipt: {existing_receipt.id}")
+                        receipt = existing_receipt
+                    else:
+                        raise HTTPException(500, f"領収書の保存に失敗しました: {str(e2)}")
             
             # 仕訳自動生成（手動追加は常に新しいレシートなので）
             generator = JournalGenerator(db)
