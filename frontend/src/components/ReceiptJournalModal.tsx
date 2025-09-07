@@ -84,12 +84,12 @@ export default function ReceiptJournalModal({
         setLastReceiptId(receipt.id)
         if (receipt.best_frame?.time_ms !== undefined) {
           setCurrentFrameTime(receipt.best_frame.time_ms)
-          setCurrentFrameUrl(`${API_URL}/videos/frames/${receipt.best_frame.id}/image`)
+          // 이미지 URL 설정 제거 - 비디오/캔버스만 사용
           
           // ビデオがロードされていたら、その時間にシーク
           if (hiddenVideoRef.current && hiddenVideoRef.current.readyState >= 2) {
             hiddenVideoRef.current.currentTime = receipt.best_frame.time_ms / 1000
-            captureVideoFrame()
+            setTimeout(() => captureVideoFrame(), 50)
           }
         }
       }
