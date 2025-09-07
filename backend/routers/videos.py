@@ -1309,13 +1309,14 @@ async def analyze_image(
     request: dict,
     db: Session = Depends(get_db)
 ):
-    """Base64画像データからOCR分析を実行（プレビューのみ）"""
+    """Base64画像データからOCR分析を実行（プレビューのみ、または保存）"""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(404, "動画が見つかりません")
     
     image_data = request.get('image_data')
     time_ms = request.get('time_ms', 0)
+    save_mode = request.get('save_mode', 'preview')  # 'preview' or 'create_new'
     
     if not image_data:
         raise HTTPException(400, "画像データが必要です")
@@ -1340,21 +1341,130 @@ async def analyze_image(
         
         try:
             analyzer = VideoAnalyzer()
-            # OCR分析を実行（保存はしない）
+            # OCR分析を実行
             receipt_data = await analyzer.extract_receipt_data(temp_path, '')
             
-            if receipt_data:
-                return {
-                    "success": True,
-                    "receipt_data": receipt_data,
-                    "time_ms": time_ms
-                }
-            else:
+            if not receipt_data:
                 return {
                     "success": False,
                     "message": "領収書データを抽出できませんでした",
                     "time_ms": time_ms
                 }
+            
+            # save_mode が 'create_new' の場合、新しい領収書として保存
+            if save_mode == 'create_new':
+                # フレームを保存
+                frame_filename = f"manual_frame_{video_id}_{time_ms}.jpg"
+                if os.getenv("RENDER") == "true":
+                    actual_frame_path = f"/tmp/frames/{frame_filename}"
+                    db_frame_path = f"uploads/frames/{frame_filename}"
+                else:
+                    actual_frame_path = f"uploads/frames/{frame_filename}"
+                    db_frame_path = actual_frame_path
+                
+                os.makedirs(os.path.dirname(actual_frame_path), exist_ok=True)
+                with open(actual_frame_path, 'wb') as f:
+                    f.write(image_bytes)
+                
+                # フレームをDBに保存
+                frame_obj = Frame(
+                    video_id=video_id,
+                    time_ms=time_ms,
+                    sharpness=0.5,
+                    brightness=0.5,
+                    contrast=0.5,
+                    phash="manual",
+                    frame_score=0.5,
+                    frame_path=db_frame_path,
+                    is_best=True,
+                    is_manual=True
+                )
+                db.add(frame_obj)
+                db.commit()
+                db.refresh(frame_obj)
+                
+                # 領収書を保存
+                from datetime import datetime
+                issue_date_value = receipt_data.get('issue_date')
+                if issue_date_value:
+                    if isinstance(issue_date_value, str):
+                        try:
+                            issue_date_value = datetime.strptime(issue_date_value, '%Y-%m-%d')
+                        except ValueError:
+                            issue_date_value = None
+                    elif not isinstance(issue_date_value, datetime):
+                        issue_date_value = None
+                else:
+                    issue_date_value = None
+                
+                doc_type = receipt_data.get('document_type')
+                if doc_type and '・' in doc_type:
+                    doc_type = doc_type.split('・')[0]
+                
+                import time
+                import random
+                unique_suffix = f"_manual_{time_ms}_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+                
+                receipt = Receipt(
+                    video_id=video_id,
+                    best_frame_id=frame_obj.id,
+                    vendor=receipt_data.get('vendor'),
+                    vendor_norm=analyzer._normalize_text(receipt_data.get('vendor', '')) + unique_suffix,
+                    document_type=doc_type,
+                    issue_date=issue_date_value,
+                    currency=receipt_data.get('currency', 'JPY'),
+                    total=receipt_data.get('total'),
+                    subtotal=receipt_data.get('subtotal'),
+                    tax=receipt_data.get('tax'),
+                    tax_rate=receipt_data.get('tax_rate'),
+                    payment_method=receipt_data.get('payment_method'),
+                    memo=f"手動追加 ({time_ms}ms)",
+                    is_manual=True
+                )
+                
+                db.add(receipt)
+                db.commit()
+                db.refresh(receipt)
+                
+                # 仕訳生成
+                generator = JournalGenerator(db)
+                journal_entries = generator.generate_journal_entries(receipt)
+                
+                for entry_data in journal_entries:
+                    journal_entry = JournalEntry(
+                        receipt_id=entry_data.receipt_id,
+                        video_id=entry_data.video_id,
+                        time_ms=int(entry_data.time_ms) if entry_data.time_ms is not None else 0,
+                        debit_account=entry_data.debit_account,
+                        credit_account=entry_data.credit_account,
+                        debit_amount=entry_data.debit_amount,
+                        credit_amount=entry_data.credit_amount,
+                        tax_account=entry_data.tax_account,
+                        tax_amount=entry_data.tax_amount,
+                        memo=entry_data.memo,
+                        status='unconfirmed',
+                        transaction_date=receipt.issue_date if receipt.issue_date else datetime.now().date()
+                    )
+                    db.add(journal_entry)
+                
+                db.commit()
+                
+                return {
+                    "success": True,
+                    "receipt_data": receipt_data,
+                    "receipt_id": receipt.id,
+                    "frame_id": frame_obj.id,
+                    "time_ms": time_ms,
+                    "message": "新しい領収書を作成しました"
+                }
+            else:
+                # プレビューモード
+                return {
+                    "success": True,
+                    "receipt_data": receipt_data,
+                    "time_ms": time_ms
+                }
+                
         finally:
             # 一時ファイルのクリーンアップ
             if os.path.exists(temp_path):
@@ -1362,6 +1472,7 @@ async def analyze_image(
                 
     except Exception as e:
         logger.error(f"Image analysis error: {e}")
+        db.rollback()
         raise HTTPException(500, f"画像分析に失敗しました: {str(e)}")
 
 @router.post("/{video_id}/analyze-frame")

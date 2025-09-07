@@ -475,12 +475,31 @@ export default function ReceiptJournalModal({
   const handleCreateNewReceiptDirect = async (data: any) => {
     if (data) {
       try {
-        // 新しい領収書作成API呼び出し
-        const response = await api.post(
-          `/videos/${videoId}/analyze-frame`,
-          null,
-          { params: { time_ms: currentFrameTime } }
-        )
+        // すでにOCRデータがあるので、そのまま保存
+        // 既に analyze-image でOCR分析済みなので、save_mode を 'create_new' にして再度呼び出す
+        const video = hiddenVideoRef.current
+        const canvas = canvasRef.current
+        const ctx = canvas.getContext('2d')
+        
+        if (!ctx) {
+          toast.error('キャンバスの初期化に失敗しました')
+          return
+        }
+
+        // ビデオフレームをキャンバスに描画
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        
+        // キャンバスをBase64画像に変換
+        const imageData = canvas.toDataURL('image/jpeg', 0.95)
+        
+        // 新しい領収書作成API呼び出し (save_mode = 'create_new')
+        const response = await api.post(`/videos/${videoId}/analyze-image`, {
+          image_data: imageData,
+          time_ms: currentFrameTime,
+          save_mode: 'create_new'  // 新しい領収書として保存
+        })
         
         if (response.data.receipt_id) {
           toast.success('新しい領収書を作成しました')
