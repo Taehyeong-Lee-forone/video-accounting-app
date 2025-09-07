@@ -34,36 +34,59 @@ async def lifespan(app: FastAPI):
         # マイグレーション実行（新しいカラムを追加）
         try:
             from sqlalchemy import text
-            with engine.connect() as conn:
+            with engine.begin() as conn:  # begin()でトランザクション管理
                 # PostgreSQL用
                 if "postgresql" in str(engine.url) or "postgres" in str(engine.url):
                     logger.info("PostgreSQL: reset_tokenカラムを追加中...")
-                    try:
-                        conn.execute(text("""
-                            ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255)
-                        """))
-                        conn.execute(text("""
-                            ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP WITH TIME ZONE
-                        """))
-                        conn.commit()
-                        logger.info("PostgreSQL: カラム追加完了")
-                    except Exception as e:
-                        logger.info(f"カラム追加スキップ（既存の可能性）: {e}")
+                    
+                    # カラムの存在確認
+                    result = conn.execute(text("""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'users' 
+                        AND column_name IN ('reset_token', 'reset_token_expires')
+                    """))
+                    existing_columns = [row[0] for row in result]
+                    
+                    # reset_tokenカラムが存在しない場合のみ追加
+                    if 'reset_token' not in existing_columns:
+                        try:
+                            conn.execute(text("""
+                                ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)
+                            """))
+                            logger.info("✅ reset_tokenカラムを追加しました")
+                        except Exception as e:
+                            logger.warning(f"reset_tokenカラム追加エラー: {e}")
+                    
+                    # reset_token_expiresカラムが存在しない場合のみ追加
+                    if 'reset_token_expires' not in existing_columns:
+                        try:
+                            conn.execute(text("""
+                                ALTER TABLE users ADD COLUMN reset_token_expires TIMESTAMP WITH TIME ZONE
+                            """))
+                            logger.info("✅ reset_token_expiresカラムを追加しました")
+                        except Exception as e:
+                            logger.warning(f"reset_token_expiresカラム追加エラー: {e}")
+                    
+                    logger.info("PostgreSQL: マイグレーション確認完了")
+                    
                 # SQLite用
                 else:
                     try:
                         conn.execute(text("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)"))
-                        conn.commit()
+                        logger.info("SQLite: reset_tokenカラムを追加")
                     except:
                         pass
                     try:
                         conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expires DATETIME"))
-                        conn.commit()
+                        logger.info("SQLite: reset_token_expiresカラムを追加")
                     except:
                         pass
+                        
             logger.info("マイグレーション完了")
         except Exception as e:
-            logger.warning(f"マイグレーションスキップ: {e}")
+            logger.error(f"マイグレーションエラー: {e}")
+            # エラーが発生してもアプリケーションは続行
         
         # 初回起動時のadminユーザー作成
         from sqlalchemy.orm import Session
