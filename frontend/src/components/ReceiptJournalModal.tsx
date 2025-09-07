@@ -1134,59 +1134,54 @@ export default function ReceiptJournalModal({
               </div>
             )}
             <div className="px-1 pb-1">
-              {/* タイムライン表示 - モダンでバランスの取れたUI */}
+              {/* YouTube スタイル タイムライン */}
               {videoDuration > 0 && (
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 shadow-sm border border-gray-100">
-                  {/* 時間表示ヘッダー */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="px-2 py-1 bg-blue-50 rounded-md">
-                        <span className="text-sm font-semibold text-blue-700 font-mono">
-                          {Math.floor(currentFrameTime / 1000 / 60)}:{((currentFrameTime / 1000) % 60).toFixed(1).padStart(4, '0')}
-                        </span>
-                      </div>
-                      <span className="text-xs text-gray-400">/</span>
-                      <span className="text-sm text-gray-600 font-mono">
-                        {Math.floor(videoDuration / 60)}:{(videoDuration % 60).toFixed(0).padStart(2, '0')}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {localReceipts.filter(r => {
-                        const j = allJournals.find((j: any) => j.receipt_id === r.id)
-                        return j?.status === 'confirmed'
-                      }).length > 0 && (
-                        <div className="flex items-center gap-1 px-2 py-0.5 bg-green-50 rounded-full">
-                          <CheckIcon className="h-3 w-3 text-green-600" />
-                          <span className="text-xs font-medium text-green-700">
-                            {localReceipts.filter(r => {
-                              const j = allJournals.find((j: any) => j.receipt_id === r.id)
-                              return j?.status === 'confirmed'
-                            }).length}/{localReceipts.length}
-                          </span>
-                        </div>
-                      )}
-                      <span className="text-xs font-medium text-gray-500">タイムライン</span>
-                    </div>
+                <div className="py-2">
+                  {/* 時間表示 */}
+                  <div className="flex items-center gap-2 px-1 mb-1">
+                    <span className="text-sm text-gray-900 font-medium">
+                      {Math.floor(currentFrameTime / 1000 / 60)}:{((currentFrameTime / 1000) % 60).toFixed(0).padStart(2, '0')}
+                    </span>
+                    <span className="text-sm text-gray-500">/</span>
+                    <span className="text-sm text-gray-600">
+                      {Math.floor(videoDuration / 60)}:{(videoDuration % 60).toFixed(0).padStart(2, '0')}
+                    </span>
                   </div>
                   
-                  {/* メインタイムラインバー */}
+                  {/* YouTubeスタイル プログレスバー */}
                   <div className="relative group">
-                    {/* ホバー時の時間プレビュー */}
+                    {/* ホバー時の時間表示 */}
                     <div 
-                      className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-20"
+                      className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30"
                       style={{ 
                         left: 'var(--hover-position, 0%)',
                         transform: 'translateX(-50%)'
                       }}
                     >
-                      <div className="bg-gray-900/95 backdrop-blur text-white text-xs px-2 py-1 rounded-md shadow-lg">
-                        <span className="hover-time font-mono">0:00</span>
+                      <div className="bg-gray-800 text-white text-xs px-2 py-1 rounded">
+                        <span className="hover-time">0:00</span>
                       </div>
-                      <div className="absolute w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-gray-900/95 left-1/2 -translate-x-1/2 -bottom-1" />
+                    </div>
+                    
+                    {/* ホバー時のフレームプレビュー */}
+                    <div 
+                      className="absolute -top-20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30"
+                      style={{ 
+                        left: 'var(--hover-position, 0%)',
+                        transform: 'translateX(-50%)'
+                      }}
+                    >
+                      <div className="w-32 h-20 bg-gray-800 rounded border-2 border-gray-700 shadow-xl">
+                        <canvas 
+                          ref={canvasRef}
+                          className="w-full h-full rounded"
+                          style={{ imageRendering: 'crisp-edges' }}
+                        />
+                      </div>
                     </div>
                     
                     <div 
-                      className="relative h-10 bg-gray-200/50 rounded-lg overflow-hidden cursor-pointer shadow-inner"
+                      className="relative h-1 group-hover:h-1.5 bg-gray-400/50 transition-all cursor-pointer"
                       onMouseMove={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect()
                         const x = e.clientX - rect.left
@@ -1195,7 +1190,16 @@ export default function ReceiptJournalModal({
                         const hoverTime = (percentage / 100) * videoDuration
                         const hoverTimeEl = e.currentTarget.querySelector('.hover-time') as HTMLElement
                         if (hoverTimeEl) {
-                          hoverTimeEl.textContent = `${Math.floor(hoverTime / 60)}:${(hoverTime % 60).toFixed(1).padStart(4, '0')}`
+                          const minutes = Math.floor(hoverTime / 60)
+                          const seconds = Math.floor(hoverTime % 60)
+                          hoverTimeEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`
+                        }
+                        // フレームプレビュー更新
+                        if (hiddenVideoRef.current && videoLoaded) {
+                          const previewTime = (percentage / 100) * videoDuration
+                          if (Math.abs(hiddenVideoRef.current.currentTime - previewTime) > 0.5) {
+                            // プレビュー用に一時的にシーク（実際の再生位置は変えない）
+                          }
                         }
                       }}
                       onMouseLeave={(e) => {
@@ -1207,122 +1211,105 @@ export default function ReceiptJournalModal({
                         const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100))
                         const newTime = Math.floor((percentage / 100) * videoDuration * 1000)
                         setCurrentFrameTime(newTime)
-                        // ビデオシーク
                         if (hiddenVideoRef.current && videoLoaded) {
                           hiddenVideoRef.current.currentTime = newTime / 1000
                         }
                       }}
                     >
-                      {/* バッファ済み範囲 */}
-                      <div className="absolute top-0 left-0 h-full bg-gray-300/30" style={{ width: '100%' }} />
+                      {/* バッファ済み部分 */}
+                      <div className="absolute top-0 left-0 h-full bg-gray-400/30" style={{ width: '100%' }} />
                       
-                      {/* プログレスバー（グラデーション） */}
+                      {/* 再生済み部分（YouTube赤） */}
                       <div 
-                        className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-150 shadow-sm"
+                        className="absolute top-0 left-0 h-full bg-red-600 group-hover:bg-red-500 transition-colors"
                         style={{ 
                           width: `${Math.max(0, Math.min(100, ((Math.max(0, currentFrameTime) / 1000 / videoDuration) * 100)))}%` 
                         }}
-                      >
-                        {/* 光沢効果 */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
-                      </div>
+                      />
                       
-                      {/* 領収書マーカー */}
+                      {/* チャプターマーカー（領収書位置） */}
                       {localReceipts.map((r: any) => {
-                        if (r.id === receipt?.id) return null
                         const position = Math.max(0, Math.min(100, ((r.best_frame?.time_ms || 0) / 1000 / videoDuration) * 100))
                         const isConfirmed = allJournals.find((j: any) => j.receipt_id === r.id)?.status === 'confirmed'
+                        const isCurrent = r.id === receipt?.id
+                        
                         return (
                           <div
                             key={r.id}
-                            className="absolute top-0 bottom-0 group/marker"
+                            className="absolute top-0 bottom-0 group/chapter"
                             style={{ left: `${position}%` }}
                             onClick={(e) => {
                               e.stopPropagation()
                               handleReceiptNavigation(r.id)
                             }}
                           >
-                            {/* マーカーライン */}
-                            <div className={`w-0.5 h-full transition-all cursor-pointer hover:w-1 ${
-                              isConfirmed 
-                                ? 'bg-gradient-to-b from-green-400 to-green-600' 
-                                : 'bg-gradient-to-b from-gray-400 to-gray-500'
-                            }`} />
+                            {/* チャプターマーク */}
+                            <div className={`absolute top-0 bottom-0 w-0.5 ${
+                              isCurrent 
+                                ? 'bg-yellow-400' 
+                                : isConfirmed 
+                                ? 'bg-white/80' 
+                                : 'bg-white/40'
+                            } hover:bg-white transition-colors cursor-pointer`} />
                             
-                            {/* ツールチップ */}
-                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/marker:opacity-100 transition-all duration-200 pointer-events-none">
-                              <div className="bg-gray-900/95 backdrop-blur text-white text-xs px-2.5 py-1.5 rounded-lg shadow-xl whitespace-nowrap">
-                                <div className="font-medium">{r.vendor || '不明'}</div>
-                                <div className="text-blue-300 font-semibold">¥{r.total?.toLocaleString()}</div>
-                                <div className="text-gray-400 text-[10px]">{((r.best_frame?.time_ms || 0) / 1000).toFixed(1)}秒</div>
+                            {/* ホバー時のラベル */}
+                            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover/chapter:opacity-100 transition-opacity pointer-events-none">
+                              <div className="bg-gray-800/95 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap">
+                                <div className="font-medium">{r.vendor || '領収書'}</div>
+                                <div className="text-gray-300">¥{r.total?.toLocaleString()}</div>
                               </div>
-                              <div className="absolute w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-gray-900/95 left-1/2 -translate-x-1/2 -bottom-1" />
                             </div>
                           </div>
                         )
                       })}
                       
-                      {/* 元の位置インジケーター */}
-                      {receipt?.best_frame?.time_ms !== undefined && Math.abs(receipt.best_frame.time_ms - currentFrameTime) > 500 && (
-                        <div 
-                          className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-                          style={{ 
-                            left: `${Math.max(0, Math.min(100, ((receipt.best_frame.time_ms / 1000 / videoDuration) * 100)))}%`
-                          }}
-                        >
-                          <div className="w-2 h-2 bg-blue-400/40 rounded-full" />
-                        </div>
-                      )}
-                      
-                      {/* 現在位置スライダー */}
+                      {/* 現在位置のハンドル */}
                       <div 
-                        className="absolute top-0 bottom-0 w-0.5 bg-white transition-all duration-150"
+                        className="absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
                         style={{ 
-                          left: `${Math.max(0, Math.min(100, ((Math.max(0, currentFrameTime) / 1000 / videoDuration) * 100)))}%`,
-                          boxShadow: '0 0 4px rgba(0,0,0,0.2)'
+                          left: `${Math.max(0, Math.min(100, ((Math.max(0, currentFrameTime) / 1000 / videoDuration) * 100)))}%`
                         }}
                       >
-                        {/* ハンドル */}
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                          <div className="w-4 h-4 bg-white rounded-full shadow-lg border-2 border-blue-500 hover:scale-125 transition-transform cursor-ew-resize">
-                            {/* 内側の点 */}
-                            <div className="absolute inset-0 m-auto w-1.5 h-1.5 bg-blue-500 rounded-full" />
-                          </div>
-                        </div>
+                        <div className="w-3 h-3 bg-red-600 rounded-full -translate-x-1/2 shadow-lg" />
                       </div>
                       
                       {/* ホバー位置インジケーター */}
                       <div 
-                        className="absolute top-0 bottom-0 w-px bg-gray-400/30 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                        className="absolute top-0 bottom-0 w-0.5 bg-white/60 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
                         style={{ 
                           left: 'var(--hover-position, -100%)'
                         }}
                       />
                     </div>
+                    
+                    {/* 下部の拡張エリア（ホバー時） */}
+                    <div className="h-2 group-hover:block hidden" />
                   </div>
                   
-                  {/* 凡例とステータス */}
-                  <div className="flex items-center justify-between mt-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-0.5 h-3 bg-gradient-to-b from-gray-400 to-gray-500 rounded-full" />
-                        <span className="text-xs text-gray-600">未確認</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-0.5 h-3 bg-gradient-to-b from-green-400 to-green-600 rounded-full" />
-                        <span className="text-xs text-gray-600">確認済</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {receipt.is_manual && (
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-md font-medium">
-                          手動追加
-                        </span>
+                  {/* 領収書情報 */}
+                  <div className="flex items-center justify-between mt-2 px-1">
+                    <div className="flex items-center gap-3 text-xs">
+                      {localReceipts.filter(r => {
+                        const j = allJournals.find((j: any) => j.receipt_id === r.id)
+                        return j?.status === 'confirmed'
+                      }).length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-green-500 rounded-full" />
+                          <span className="text-gray-600">
+                            {localReceipts.filter(r => {
+                              const j = allJournals.find((j: any) => j.receipt_id === r.id)
+                              return j?.status === 'confirmed'
+                            }).length} 件確認済み
+                          </span>
+                        </div>
                       )}
-                      <span className="text-xs text-gray-500">
-                        {localReceipts.length}件
+                      <span className="text-gray-500">
+                        合計 {localReceipts.length} 件
                       </span>
                     </div>
+                    {receipt.is_manual && (
+                      <span className="text-xs text-blue-600">手動追加</span>
+                    )}
                   </div>
                 </div>
               )}
