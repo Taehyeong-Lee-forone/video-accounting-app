@@ -19,19 +19,27 @@ function ResetPasswordForm() {
 
   useEffect(() => {
     // トークンの有効性を確認
+    console.log('Token from URL:', token)
+    console.log('API_BASE_URL:', API_BASE_URL)
+    
     if (token) {
       verifyToken()
     } else {
+      console.log('No token found in URL')
       setIsTokenValid(false)
     }
   }, [token])
 
   const verifyToken = async () => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/auth/verify-reset-token?token=${token}`
-      )
+      const url = `${API_BASE_URL}/api/auth/verify-reset-token?token=${token}`
+      console.log('Verifying token at:', url)
+      
+      const response = await fetch(url)
+      console.log('Response status:', response.status)
+      
       const data = await response.json()
+      console.log('Response data:', data)
       
       if (data.valid) {
         setIsTokenValid(true)
@@ -41,6 +49,7 @@ function ResetPasswordForm() {
         toast.error(data.message || 'トークンが無効です')
       }
     } catch (error) {
+      console.error('Token verification error:', error)
       setIsTokenValid(false)
       toast.error('トークンの確認中にエラーが発生しました')
     }
