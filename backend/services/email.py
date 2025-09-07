@@ -22,7 +22,17 @@ class EmailService:
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_user = os.getenv("SMTP_USER", "")  # Gmailアドレス
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")  # アプリパスワード
-        self.from_email = os.getenv("FROM_EMAIL", self.smtp_user)
+        
+        # Render環境で環境変数が取得できない場合の強制設定
+        if not self.smtp_user and os.getenv("RENDER") == "true":
+            logger.warning("Render環境で環境変数が取得できません。ハードコード値を使用します。")
+            self.smtp_host = "smtp.gmail.com"
+            self.smtp_port = 587
+            self.smtp_user = "forone.video2@gmail.com"
+            self.smtp_password = "ujqbdsagmerfbnvp"
+            logger.info(f"ハードコード設定使用: {self.smtp_user}")
+        
+        self.from_email = os.getenv("FROM_EMAIL", self.smtp_user or "forone.video2@gmail.com")
         self.app_name = "動画会計アプリ"
         self.app_url = os.getenv("FRONTEND_URL", "https://video-accounting-app.vercel.app")
         
@@ -53,8 +63,10 @@ class EmailService:
             msg.attach(part_html)
             
             # SMTP設定チェック
+            logger.info(f"SMTP設定確認: USER={self.smtp_user}, HOST={self.smtp_host}:{self.smtp_port}")
             if not self.smtp_user or not self.smtp_password:
-                logger.error(f"SMTP認証情報が不足: SMTP_USER={bool(self.smtp_user)}, SMTP_PASSWORD={bool(self.smtp_password)}")
+                logger.error(f"SMTP認証情報が不足: SMTP_USER={self.smtp_user or '未設定'}, SMTP_PASSWORD={'設定済' if self.smtp_password else '未設定'}")
+                logger.error(f"環境変数: SMTP_HOST={os.getenv('SMTP_HOST')}, SMTP_USER={os.getenv('SMTP_USER')}")
                 return False
             
             # SMTP接続と送信

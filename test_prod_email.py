@@ -1,23 +1,82 @@
 #!/usr/bin/env python3
-"""프로덕션 이메일 설정 테스트"""
+"""
+プロダクション環境でのメール送信テスト
+"""
 import requests
+import json
+import time
 
-# 프로덕션 API 테스트
-url = "https://video-accounting-app.onrender.com/api/auth/forgot-password"
-data = {"email": "forone.video2@gmail.com"}
+PROD_URL = "https://video-accounting-app.onrender.com"
+TEST_EMAIL = "ritehyon@gmail.com"
 
-print("🔍 프로덕션 비밀번호 재설정 테스트")
-print(f"   URL: {url}")
-print(f"   Email: {data['email']}")
-print()
+def test_password_reset():
+    """パスワードリセットメールのテスト"""
+    
+    print("=" * 50)
+    print(f"📧 メール送信テスト開始")
+    print(f"対象メール: {TEST_EMAIL}")
+    print(f"環境: プロダクション ({PROD_URL})")
+    print("=" * 50)
+    
+    # 1. パスワードリセットリクエスト送信
+    print("\n1️⃣ パスワードリセットリクエスト送信中...")
+    response = requests.post(
+        f"{PROD_URL}/api/auth/forgot-password",
+        json={"email": TEST_EMAIL},
+        headers={"Content-Type": "application/json"}
+    )
+    
+    print(f"   ステータスコード: {response.status_code}")
+    
+    try:
+        result = response.json()
+        print(f"   レスポンス: {json.dumps(result, ensure_ascii=False, indent=2)}")
+        
+        if response.status_code == 200:
+            print("   ✅ リクエスト成功！")
+            print(f"   📮 {TEST_EMAIL} のメールボックスを確認してください")
+            print("   📝 件名: 【動画会計アプリ】パスワードリセットのご案内")
+        else:
+            print(f"   ❌ エラー: {result.get('detail', 'Unknown error')}")
+            
+    except Exception as e:
+        print(f"   ❌ パースエラー: {e}")
+        print(f"   生レスポンス: {response.text}")
+    
+    return response.status_code == 200
 
-response = requests.post(url, json=data)
-print(f"응답 코드: {response.status_code}")
-print(f"응답 내용: {response.json()}")
+def check_server_logs():
+    """サーバーログを確認（可能な場合）"""
+    print("\n2️⃣ サーバー状態確認中...")
+    
+    # DB情報エンドポイントで環境変数の状態を確認
+    response = requests.get(f"{PROD_URL}/db-info")
+    if response.status_code == 200:
+        info = response.json()
+        print(f"   データベース: {info.get('database_type')}")
+        print(f"   Render環境: {info.get('render_env')}")
+        print(f"   統計: {info.get('statistics')}")
 
-if response.status_code == 200:
-    print("\n✅ API 응답 성공!")
-    print("📧 forone.video2@gmail.com 받은편지함을 확인하세요")
-    print("   (환경 변수가 설정되어 있다면 메일이 도착할 것입니다)")
-else:
-    print("\n❌ API 오류 발생")
+def main():
+    """メインテスト実行"""
+    
+    # メール送信テスト
+    success = test_password_reset()
+    
+    # サーバー状態確認
+    check_server_logs()
+    
+    # 結果サマリー
+    print("\n" + "=" * 50)
+    if success:
+        print("🎉 テスト完了！")
+        print(f"📧 {TEST_EMAIL} のメールボックスを確認してください")
+        print("⏰ メールが届くまで1-2分かかる場合があります")
+    else:
+        print("❌ テスト失敗")
+        print("📝 Renderのログを確認してください:")
+        print("   https://dashboard.render.com/")
+    print("=" * 50)
+
+if __name__ == "__main__":
+    main()
