@@ -33,14 +33,20 @@ export const useAuthStore = create<AuthState>()(
       login: async (username: string, password: string) => {
         try {
           // デバッグログ追加
-          console.log('🔐 Login attempt:', { username, API_BASE_URL });
+          console.log('🔐 Login attempt:', { 
+            username, 
+            API_BASE_URL,
+            env: process.env.NODE_ENV,
+            publicApiUrl: process.env.NEXT_PUBLIC_API_URL
+          });
           
           // FormDataとして送信（OAuth2仕様）
           const formData = new URLSearchParams();
           formData.append('username', username);
           formData.append('password', password);
 
-          console.log('📤 Sending login request to:', `${API_BASE_URL}/auth/login`);
+          const loginUrl = `${API_BASE_URL}/auth/login`;
+          console.log('📤 Sending login request to:', loginUrl);
           
           const response = await axios.post(
             `${API_BASE_URL}/auth/login`,
