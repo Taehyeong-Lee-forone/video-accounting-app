@@ -1134,39 +1134,59 @@ export default function ReceiptJournalModal({
               </div>
             )}
             <div className="px-1 pb-1">
-              {/* タイムライン表示 - ミニマルデザイン */}
+              {/* タイムライン表示 - モダンでバランスの取れたUI */}
               {videoDuration > 0 && (
-                <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  {/* 時間表示 */}
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-gray-500">
-                      {Math.floor(currentFrameTime / 1000 / 60)}:{((currentFrameTime / 1000) % 60).toFixed(1).padStart(4, '0')}
-                    </span>
-                    <span className="text-xs font-medium text-blue-600">
-                      タイムライン
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {Math.floor(videoDuration / 60)}:{(videoDuration % 60).toFixed(0).padStart(2, '0')}
-                    </span>
+                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 shadow-sm border border-gray-100">
+                  {/* 時間表示ヘッダー */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="px-2 py-1 bg-blue-50 rounded-md">
+                        <span className="text-sm font-semibold text-blue-700 font-mono">
+                          {Math.floor(currentFrameTime / 1000 / 60)}:{((currentFrameTime / 1000) % 60).toFixed(1).padStart(4, '0')}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-400">/</span>
+                      <span className="text-sm text-gray-600 font-mono">
+                        {Math.floor(videoDuration / 60)}:{(videoDuration % 60).toFixed(0).padStart(2, '0')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {localReceipts.filter(r => {
+                        const j = allJournals.find((j: any) => j.receipt_id === r.id)
+                        return j?.status === 'confirmed'
+                      }).length > 0 && (
+                        <div className="flex items-center gap-1 px-2 py-0.5 bg-green-50 rounded-full">
+                          <CheckIcon className="h-3 w-3 text-green-600" />
+                          <span className="text-xs font-medium text-green-700">
+                            {localReceipts.filter(r => {
+                              const j = allJournals.find((j: any) => j.receipt_id === r.id)
+                              return j?.status === 'confirmed'
+                            }).length}/{localReceipts.length}
+                          </span>
+                        </div>
+                      )}
+                      <span className="text-xs font-medium text-gray-500">タイムライン</span>
+                    </div>
                   </div>
                   
                   {/* メインタイムラインバー */}
                   <div className="relative group">
-                    {/* ホバー時の時間表示 */}
+                    {/* ホバー時の時間プレビュー */}
                     <div 
-                      className="absolute -top-6 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20"
+                      className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-20"
                       style={{ 
                         left: 'var(--hover-position, 0%)',
                         transform: 'translateX(-50%)'
                       }}
                     >
-                      <div className="bg-gray-800 text-white text-xs px-1.5 py-0.5 rounded">
-                        <span className="hover-time">0:00</span>
+                      <div className="bg-gray-900/95 backdrop-blur text-white text-xs px-2 py-1 rounded-md shadow-lg">
+                        <span className="hover-time font-mono">0:00</span>
                       </div>
+                      <div className="absolute w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-gray-900/95 left-1/2 -translate-x-1/2 -bottom-1" />
                     </div>
                     
                     <div 
-                      className="relative h-8 bg-gray-100 rounded-full overflow-hidden cursor-pointer"
+                      className="relative h-10 bg-gray-200/50 rounded-lg overflow-hidden cursor-pointer shadow-inner"
                       onMouseMove={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect()
                         const x = e.clientX - rect.left
@@ -1177,6 +1197,9 @@ export default function ReceiptJournalModal({
                         if (hoverTimeEl) {
                           hoverTimeEl.textContent = `${Math.floor(hoverTime / 60)}:${(hoverTime % 60).toFixed(1).padStart(4, '0')}`
                         }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.setProperty('--hover-position', '-100%')
                       }}
                       onClick={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect()
@@ -1190,13 +1213,19 @@ export default function ReceiptJournalModal({
                         }
                       }}
                     >
-                      {/* プログレスバー */}
+                      {/* バッファ済み範囲 */}
+                      <div className="absolute top-0 left-0 h-full bg-gray-300/30" style={{ width: '100%' }} />
+                      
+                      {/* プログレスバー（グラデーション） */}
                       <div 
-                        className="absolute top-0 left-0 h-full bg-blue-500 transition-all duration-100"
+                        className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-150 shadow-sm"
                         style={{ 
                           width: `${Math.max(0, Math.min(100, ((Math.max(0, currentFrameTime) / 1000 / videoDuration) * 100)))}%` 
                         }}
-                      />
+                      >
+                        {/* 光沢効果 */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
+                      </div>
                       
                       {/* 領収書マーカー */}
                       {localReceipts.map((r: any) => {
@@ -1206,68 +1235,94 @@ export default function ReceiptJournalModal({
                         return (
                           <div
                             key={r.id}
-                            className="absolute top-1/2 -translate-y-1/2 group/marker"
+                            className="absolute top-0 bottom-0 group/marker"
                             style={{ left: `${position}%` }}
                             onClick={(e) => {
                               e.stopPropagation()
                               handleReceiptNavigation(r.id)
                             }}
                           >
-                            {/* マーカー */}
-                            <div className={`w-1.5 h-3 rounded-full transition-all cursor-pointer hover:h-4 ${
-                              isConfirmed ? 'bg-green-500' : 'bg-gray-400'
+                            {/* マーカーライン */}
+                            <div className={`w-0.5 h-full transition-all cursor-pointer hover:w-1 ${
+                              isConfirmed 
+                                ? 'bg-gradient-to-b from-green-400 to-green-600' 
+                                : 'bg-gradient-to-b from-gray-400 to-gray-500'
                             }`} />
                             
                             {/* ツールチップ */}
-                            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover/marker:opacity-100 transition-opacity pointer-events-none">
-                              <div className="bg-gray-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                                <div>{r.vendor || '不明'}</div>
-                                <div className="text-gray-300">¥{r.total?.toLocaleString()}</div>
+                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/marker:opacity-100 transition-all duration-200 pointer-events-none">
+                              <div className="bg-gray-900/95 backdrop-blur text-white text-xs px-2.5 py-1.5 rounded-lg shadow-xl whitespace-nowrap">
+                                <div className="font-medium">{r.vendor || '不明'}</div>
+                                <div className="text-blue-300 font-semibold">¥{r.total?.toLocaleString()}</div>
+                                <div className="text-gray-400 text-[10px]">{((r.best_frame?.time_ms || 0) / 1000).toFixed(1)}秒</div>
                               </div>
+                              <div className="absolute w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-gray-900/95 left-1/2 -translate-x-1/2 -bottom-1" />
                             </div>
                           </div>
                         )
                       })}
                       
-                      {/* 元の位置マーカー */}
+                      {/* 元の位置インジケーター */}
                       {receipt?.best_frame?.time_ms !== undefined && Math.abs(receipt.best_frame.time_ms - currentFrameTime) > 500 && (
                         <div 
-                          className="absolute top-1/2 -translate-y-1/2"
+                          className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
                           style={{ 
                             left: `${Math.max(0, Math.min(100, ((receipt.best_frame.time_ms / 1000 / videoDuration) * 100)))}%`
                           }}
                         >
-                          <div className="w-1 h-1 bg-blue-300 rounded-full" />
+                          <div className="w-2 h-2 bg-blue-400/40 rounded-full" />
                         </div>
                       )}
                       
-                      {/* 現在位置ハンドル */}
+                      {/* 現在位置スライダー */}
                       <div 
-                        className="absolute top-1/2 -translate-y-1/2"
+                        className="absolute top-0 bottom-0 w-0.5 bg-white transition-all duration-150"
                         style={{ 
-                          left: `${Math.max(0, Math.min(100, ((Math.max(0, currentFrameTime) / 1000 / videoDuration) * 100)))}%`
+                          left: `${Math.max(0, Math.min(100, ((Math.max(0, currentFrameTime) / 1000 / videoDuration) * 100)))}%`,
+                          boxShadow: '0 0 4px rgba(0,0,0,0.2)'
                         }}
                       >
-                        <div className="w-3 h-3 bg-white border-2 border-blue-500 rounded-full shadow-sm hover:scale-110 transition-transform cursor-pointer" />
+                        {/* ハンドル */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                          <div className="w-4 h-4 bg-white rounded-full shadow-lg border-2 border-blue-500 hover:scale-125 transition-transform cursor-ew-resize">
+                            {/* 内側の点 */}
+                            <div className="absolute inset-0 m-auto w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                          </div>
+                        </div>
                       </div>
+                      
+                      {/* ホバー位置インジケーター */}
+                      <div 
+                        className="absolute top-0 bottom-0 w-px bg-gray-400/30 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                        style={{ 
+                          left: 'var(--hover-position, -100%)'
+                        }}
+                      />
                     </div>
                   </div>
                   
-                  {/* 凡例 */}
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center gap-3 text-xs">
-                      <div className="flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
-                        <span className="text-gray-600">他の領収書</span>
+                  {/* 凡例とステータス */}
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-0.5 h-3 bg-gradient-to-b from-gray-400 to-gray-500 rounded-full" />
+                        <span className="text-xs text-gray-600">未確認</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                        <span className="text-gray-600">確認済</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-0.5 h-3 bg-gradient-to-b from-green-400 to-green-600 rounded-full" />
+                        <span className="text-xs text-gray-600">確認済</span>
                       </div>
                     </div>
-                    {receipt.is_manual && (
-                      <span className="text-xs text-blue-600">手動追加</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {receipt.is_manual && (
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-md font-medium">
+                          手動追加
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-500">
+                        {localReceipts.length}件
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
