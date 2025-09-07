@@ -59,25 +59,47 @@ export const useAuthStore = create<AuthState>()(
           );
 
           const { access_token, refresh_token } = response.data;
+          console.log('🎫 Token received, fetching user info...');
+
+          // Axiosのデフォルトヘッダーに設定（userResponse前に設定）
+          axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
           // ユーザー情報取得
-          const userResponse = await axios.get(`${API_BASE_URL}/auth/me`, {
-            headers: {
-              Authorization: `Bearer ${access_token}`,
-            },
-          });
+          try {
+            const userResponse = await axios.get(`${API_BASE_URL}/auth/me`, {
+              headers: {
+                Authorization: `Bearer ${access_token}`,
+              },
+            });
+            
+            console.log('👤 User info received:', userResponse.data);
 
-          set({
-            token: access_token,
-            refreshToken: refresh_token,
-            user: userResponse.data,
-            isAuthenticated: true,
-          });
-
-          // Axiosのデフォルトヘッダーに設定
-          axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-          
-          console.log('✅ Login successful!');
+            set({
+              token: access_token,
+              refreshToken: refresh_token,
+              user: userResponse.data,
+              isAuthenticated: true,
+            });
+            
+            console.log('✅ Login successful!');
+          } catch (meError: any) {
+            console.error('❌ Failed to fetch user info:', {
+              status: meError.response?.status,
+              data: meError.response?.data,
+              message: meError.message,
+              headers: meError.response?.headers
+            });
+            
+            // ログインは成功したが、ユーザー情報取得に失敗した場合でも続行
+            set({
+              token: access_token,
+              refreshToken: refresh_token,
+              user: null,
+              isAuthenticated: true,
+            });
+            
+            console.warn('⚠️ Login successful but user info unavailable');
+          }
         } catch (error: any) {
           console.error('❌ Login error:', {
             status: error.response?.status,
