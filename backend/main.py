@@ -10,6 +10,7 @@ from database import engine, Base, get_db
 from routers import videos, journals, masters, auth, export, data_sync, password_reset, video_stream
 from routers import auth_v2  # 新しい認証ルーター追加
 from routers import temp_user  # 一時的なユーザー作成API
+from routers import test_email  # メール送信テストAPI
 import logging
 
 load_dotenv()
@@ -112,6 +113,7 @@ app.include_router(export.router, prefix="/export", tags=["エクスポート"])
 app.include_router(data_sync.router, tags=["データ同期"])  # データ同期API
 app.include_router(video_stream.router, prefix="/videos", tags=["ビデオストリーミング"])  # ビデオストリーミングAPI
 app.include_router(temp_user.router, tags=["一時API"])  # 一時的なユーザー作成API
+app.include_router(test_email.router, tags=["テスト"])  # メール送信テストAPI
 
 @app.get("/")
 async def root():

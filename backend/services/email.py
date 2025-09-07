@@ -71,16 +71,37 @@ class EmailService:
             
             # SMTP接続と送信
             logger.info(f"SMTP接続開始: {self.smtp_host}:{self.smtp_port}")
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                server.starttls()  # TLS暗号化を有効化
-                server.login(self.smtp_user, self.smtp_password)
-                server.send_message(msg)
+            logger.info(f"認証情報: USER={self.smtp_user}, PASS={'*' * len(self.smtp_password) if self.smtp_password else 'NONE'}")
             
-            logger.info(f"メール送信成功: {to_email}")
-            return True
+            try:
+                server = smtplib.SMTP(self.smtp_host, self.smtp_port)
+                server.set_debuglevel(1)  # デバッグ出力を有効化
+                logger.info("SMTP接続確立")
+                
+                server.starttls()  # TLS暗号化を有効化
+                logger.info("TLS暗号化有効化")
+                
+                server.login(self.smtp_user, self.smtp_password)
+                logger.info("SMTP認証成功")
+                
+                server.send_message(msg)
+                logger.info(f"メール送信成功: {to_email}")
+                
+                server.quit()
+                return True
+                
+            except smtplib.SMTPAuthenticationError as e:
+                logger.error(f"SMTP認証エラー: {e}")
+                logger.error(f"USER: {self.smtp_user}, HOST: {self.smtp_host}")
+                return False
+            except smtplib.SMTPException as e:
+                logger.error(f"SMTP送信エラー: {e}")
+                return False
             
         except Exception as e:
-            logger.error(f"メール送信失敗: {e}")
+            logger.error(f"メール送信失敗（一般エラー）: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
     
     def send_password_reset_email(self, to_email: str, reset_token: str, username: str) -> bool:
