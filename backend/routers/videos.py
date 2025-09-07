@@ -1506,7 +1506,7 @@ async def analyze_frame_at_time(
         db.refresh(frame_obj)
         
         # Gemini APIで領収書データ抽出
-        receipt_data = await analyzer.extract_receipt_data(frame_path, '')
+        receipt_data = await analyzer.extract_receipt_data(actual_frame_path, '')
         
         if receipt_data:
             # Final safety check for composite document types

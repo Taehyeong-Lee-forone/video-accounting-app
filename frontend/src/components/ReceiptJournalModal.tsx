@@ -534,9 +534,21 @@ export default function ReceiptJournalModal({
         } else {
           toast.error('領収書の作成に失敗しました')
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Create new receipt error:', error)
-        toast.error('領収書の作成に失敗しました')
+        // エラーメッセージを詳細に分析
+        const errorMessage = error.response?.data?.detail || ''
+        
+        if (errorMessage.includes('UNIQUE constraint') || errorMessage.includes('領収書の保存に失敗')) {
+          // 重複エラーの場合
+          toast.error('同じ内容の領収書が既に存在する可能性があります。\n時間を少し変えて再度お試しください。')
+        } else if (error.response?.status === 500) {
+          // サーバーエラーの場合
+          toast.error('サーバーエラーが発生しました。再度お試しください。')
+        } else {
+          // その他のエラー
+          toast.error('領収書の作成に失敗しました')
+        }
       }
     }
   }
@@ -566,9 +578,21 @@ export default function ReceiptJournalModal({
         } else {
           toast.error('領収書の作成に失敗しました')
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Create new receipt error:', error)
-        toast.error('領収書の作成に失敗しました')
+        // エラーメッセージを詳細に分析
+        const errorMessage = error.response?.data?.detail || ''
+        
+        if (errorMessage.includes('UNIQUE constraint') || errorMessage.includes('領収書の保存に失敗')) {
+          // 重複エラーの場合
+          toast.error('同じ内容の領収書が既に存在する可能性があります。\n時間を少し変えて再度お試しください。')
+        } else if (error.response?.status === 500) {
+          // サーバーエラーの場合
+          toast.error('サーバーエラーが発生しました。再度お試しください。')
+        } else {
+          // その他のエラー
+          toast.error('領収書の作成に失敗しました')
+        }
       }
       
       setShowOcrConfirmDialog(false)
