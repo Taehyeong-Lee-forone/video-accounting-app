@@ -47,7 +47,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
   const [modalReceipt, setModalReceipt] = useState<any>(null)
   const [modalJournal, setModalJournal] = useState<any>(null)
   const [videoReady, setVideoReady] = useState(false)
-  const [viewedReceiptIds, setViewedReceiptIds] = useState<Set<number>>(new Set()) // 確認済み領収書ID
+  // viewedReceiptIds 제거 - confirmed 상태만 사용
   const videoRef = useRef<HTMLVideoElement>(null)
   const seekToRef = useRef<((time: number) => void) | null>(null)
   const exportMenuRef = useRef<HTMLDivElement>(null)
@@ -269,7 +269,7 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
     console.log('Found journal:', relatedJournal)
     
     // この領収書を確認済みとしてマーク
-    setViewedReceiptIds(prev => new Set(prev).add(receipt.id))
+    // 모달 열기 처리
     
     // モーダルを開く
     setModalReceipt(receipt)
@@ -673,11 +673,17 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                   <div className="flex items-center gap-2 text-xs text-gray-600">
                     <div className="flex items-center gap-1">
                       <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                      <span>確認済み ({viewedReceiptIds.size})</span>
+                      <span>確認済み ({video?.receipts?.filter((r: any) => {
+                        const journal = journals?.find((j: any) => j.receipt_id === r.id)
+                        return journal?.status === 'confirmed'
+                      }).length || 0})</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <div className="w-3 h-3 bg-gray-300 rounded-full"></div>
-                      <span>未確認 ({(video.receipts?.length || 0) - viewedReceiptIds.size})</span>
+                      <span>未確認 ({(video.receipts?.length || 0) - (video?.receipts?.filter((r: any) => {
+                        const journal = journals?.find((j: any) => j.receipt_id === r.id)
+                        return journal?.status === 'confirmed'
+                      }).length || 0)})</span>
                     </div>
                   </div>
                 </div>
@@ -698,14 +704,14 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                         const relatedJournal = journals?.find((j: any) => j.receipt_id === receipt.id)
                         const isJournalConfirmed = relatedJournal?.status === 'confirmed'
                         
-                        const isViewed = viewedReceiptIds.has(receipt.id)
+                        // isViewed 제거 - isJournalConfirmed만 사용
                         
                         return (
                           <div 
                             key={`receipt-${receipt.id}-${index}`} 
                             className={`p-3 cursor-pointer transition-all hover:bg-gray-50 relative ${
                               selectedReceipt?.id === receipt.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
-                            } ${isViewed ? 'bg-green-50' : ''}`}
+                            } ${isJournalConfirmed ? 'bg-green-50' : ''}`}
                             onClick={(e) => {
                               // 削除ボタンがクリックされた場合は処理しない
                               if ((e.target as HTMLElement).closest('button')) {
@@ -727,15 +733,10 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
                                   <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold text-gray-700">
                                     {index + 1}
                                   </div>
-                                  {/* 確認状態バッジ - 더 크고 명확하게 */}
-                                  {isViewed && (
+                                  {/* 確認状態バッジ - confirmed 상태만 표시 */}
+                                  {isJournalConfirmed && (
                                     <div className="absolute -right-2 -bottom-2 animate-bounce-once">
                                       <CheckIcon className="h-6 w-6 text-white bg-green-500 rounded-full p-1 shadow-lg ring-2 ring-white" />
-                                    </div>
-                                  )}
-                                  {isJournalConfirmed && !isViewed && (
-                                    <div className="absolute -right-1 -bottom-1">
-                                      <CheckIcon className="h-4 w-4 text-white bg-blue-600 rounded-full p-0.5" />
                                     </div>
                                   )}
                                 </div>
@@ -866,10 +867,10 @@ export default function JournalReview({ videoId }: JournalReviewProps) {
             const relatedJournal = journals?.find((j: any) => j.receipt_id === receiptId)
             setModalJournal(relatedJournal || null)
             // 閲覧済みとしてマーク
-            setViewedReceiptIds(prev => new Set(prev).add(receiptId))
+            // 영수증 변경 처리
           }
         }}
-        viewedReceiptIds={viewedReceiptIds}
+        // viewedReceiptIds 제거
       />
 
     </div>

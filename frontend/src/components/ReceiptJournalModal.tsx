@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { XMarkIcon, CheckIcon, XCircleIcon, PencilIcon, ChevronLeftIcon, ChevronRightIcon, CameraIcon, PlusIcon, TrashIcon, ClockIcon } from '@heroicons/react/24/outline'
+import VideoFrameSelector from './VideoFrameSelector'
 import toast from 'react-hot-toast'
 import { api, API_URL } from '@/lib/api'
 
@@ -18,7 +19,6 @@ interface ReceiptJournalModalProps {
   onUpdate: () => void
   allReceipts?: any[]  // すべての領収書リスト
   onReceiptChange?: (receiptId: number) => void  // 領収書変更コールバック
-  viewedReceiptIds?: Set<number>  // 確認済み領収書IDセット
 }
 
 export default function ReceiptJournalModal({ 
@@ -31,8 +31,7 @@ export default function ReceiptJournalModal({
   onClose,
   onUpdate,
   allReceipts = [],
-  onReceiptChange,
-  viewedReceiptIds = new Set()
+  onReceiptChange
 }: ReceiptJournalModalProps) {
   // 常に編集モードで開始
   const [receiptForm, setReceiptForm] = useState<any>({})
@@ -53,6 +52,7 @@ export default function ReceiptJournalModal({
   const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 })  // 画像位置
   const [isDragging, setIsDragging] = useState(false)  // ドラッグ状態
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })  // ドラッグ開始位置
+  const [useVideoPreview, setUseVideoPreview] = useState(true)  // 動画プレビューを使用
   const [confirmAnimating, setConfirmAnimating] = useState(false)  // 確認アニメーション状態
   const imageContainerRef = useRef<HTMLDivElement>(null)
 
@@ -474,16 +474,14 @@ export default function ReceiptJournalModal({
         // 確認を取り消す
         await api.post(`/journals/${journal.id}/reject`)
         setIsConfirmed(false)
-        // アニメーション効果を発動
-        setConfirmAnimating(true)
-        setTimeout(() => setConfirmAnimating(false), 600)
+        // 取り消し時はアニメーションなし
       } else {
         // 確認する
         await api.post(`/journals/${journal.id}/confirm`, {
           confirmed_by: 'user'
         })
         setIsConfirmed(true)
-        // アニメーション効果を発動
+        // 確認時のみアニメーション効果を発動
         setConfirmAnimating(true)
         setTimeout(() => setConfirmAnimating(false), 600)
       }
@@ -552,26 +550,15 @@ export default function ReceiptJournalModal({
                 <h3 className="text-sm font-bold text-gray-900">領収書一覧</h3>
                 <div className="flex items-center justify-between mt-0.5">
                   <p className="text-xs font-semibold text-gray-800">{localReceipts.length}件</p>
-                  <div className="flex items-center gap-2">
-                    {/* 確認済み数 */}
-                    {allJournals.filter((j: any) => j.status === 'confirmed').length > 0 && (
-                      <div className="flex items-center gap-0.5">
-                        <CheckIcon className="h-3 w-3 text-green-600" />
-                        <span className="text-xs font-medium text-green-700">
-                          {allJournals.filter((j: any) => j.status === 'confirmed').length}
-                        </span>
-                      </div>
-                    )}
-                    {/* 閲覧済み数 */}
-                    {viewedReceiptIds.size > 0 && (
-                      <div className="flex items-center gap-0.5">
-                        <ClockIcon className="h-3 w-3 text-orange-500" />
-                        <span className="text-xs font-medium text-orange-600">
-                          {viewedReceiptIds.size}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                  {/* 確認済み数 */}
+                  {allJournals.filter((j: any) => j.status === 'confirmed').length > 0 && (
+                    <div className="flex items-center gap-0.5">
+                      <CheckIcon className="h-3 w-3 text-green-600" />
+                      <span className="text-xs font-medium text-green-700">
+                        {allJournals.filter((j: any) => j.status === 'confirmed').length}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
@@ -579,7 +566,6 @@ export default function ReceiptJournalModal({
                   // この領収書のjournalを検索
                   const relatedJournal = allJournals.find((j: any) => j.receipt_id === r.id)
                   const isJournalConfirmed = relatedJournal?.status === 'confirmed'
-                  const isViewed = viewedReceiptIds.has(r.id)
                   const isCurrentReceipt = r.id === receipt?.id
                   
                   return (
@@ -589,7 +575,7 @@ export default function ReceiptJournalModal({
                       className={`w-full p-2 text-left transition-all duration-200 border-b border-gray-200 relative overflow-hidden ${
                         isCurrentReceipt 
                           ? 'bg-gradient-to-r from-blue-100 to-blue-50 border-l-4 border-l-blue-600 shadow-md ring-1 ring-blue-200' 
-                          : isViewed
+                          : isJournalConfirmed
                           ? 'bg-gradient-to-r from-green-50 to-white hover:from-green-100 hover:to-green-50'
                           : 'hover:bg-gray-100'
                       }`}
@@ -605,7 +591,7 @@ export default function ReceiptJournalModal({
                           <div className={`flex items-center justify-center w-6 h-6 rounded-full font-bold text-xs ${
                             isCurrentReceipt 
                               ? 'bg-blue-600 text-white shadow-sm' 
-                              : isViewed
+                              : isJournalConfirmed
                               ? 'bg-green-600 text-white'
                               : 'bg-gray-200 text-gray-700'
                           }`}>
@@ -619,13 +605,6 @@ export default function ReceiptJournalModal({
                               <div className="relative bg-green-100 rounded-full p-0.5">
                                 <CheckIcon className="h-4 w-4 text-green-700 font-bold" />
                               </div>
-                            </div>
-                          )}
-                          
-                          {/* 閲覧済みだが未確認の場合 */}
-                          {isViewed && !isJournalConfirmed && (
-                            <div className="bg-orange-100 rounded-full p-0.5">
-                              <ClockIcon className="h-3 w-3 text-orange-600" title="閲覧済み（未確認）" />
                             </div>
                           )}
                         </div>
@@ -740,10 +719,10 @@ export default function ReceiptJournalModal({
                   >
                     {isConfirmed ? '確認済み' : '未確認'}
                   </label>
-                  {/* アニメーション表示 */}
-                  {confirmAnimating && (
+                  {/* アニメーション表示 - 確認時のみ */}
+                  {confirmAnimating && isConfirmed && (
                     <div className="absolute -right-8 flex items-center">
-                      <CheckIcon className={`h-5 w-5 ${isConfirmed ? 'text-green-600' : 'text-gray-700'} animate-bounce`} />
+                      <CheckIcon className="h-5 w-5 text-green-600 animate-bounce" />
                     </div>
                   )}
                 </div>
@@ -770,7 +749,8 @@ export default function ReceiptJournalModal({
           {/* 左側: 領収書画像 */}
           <div className="flex-1 border-r bg-gray-50 flex flex-col min-w-0">
             <div className="space-y-1 p-1">
-              {/* フレーム制御ボタン - コンパクトUI */}
+              {/* フレーム制御ボタン - 静止画モードのみ表示 */}
+              {!useVideoPreview && (
               <div className="bg-white rounded p-1 border">
                 <div className="flex items-center justify-between mb-0.5">
                   <span className="text-xs font-medium text-gray-700">フレーム</span>
@@ -836,6 +816,7 @@ export default function ReceiptJournalModal({
                   </div>
                 </div>
               </div>
+              )}
               
               {/* OCR分析オプション - コンパクトUI */}
               <div className="bg-blue-50 rounded p-1 border border-blue-200">
@@ -901,7 +882,44 @@ export default function ReceiptJournalModal({
                 </div>
               </div>
             </div>
-            {(receipt.best_frame || currentFrameUrl) && (
+            
+            {/* 動画/画像切り替えボタン */}
+            <div className="px-1 pb-1">
+              <button
+                onClick={() => setUseVideoPreview(!useVideoPreview)}
+                className={`w-full px-2 py-1 text-xs font-medium rounded transition-colors ${
+                  useVideoPreview 
+                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                    : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                }`}
+              >
+                {useVideoPreview ? '🎬 動画プレビューモード' : '🖼️ 静止画モード'}
+              </button>
+            </div>
+            
+            {/* 動画プレビューまたは静止画表示 */}
+            {useVideoPreview ? (
+              <div className="flex-1 min-h-0 p-2">
+                <VideoFrameSelector
+                  videoId={videoId}
+                  currentTimeMs={currentFrameTime}
+                  duration={videoDuration}
+                  onTimeChange={(timeMs) => {
+                    setCurrentFrameTime(timeMs)
+                    // フレーム時間が変更されたら新しいフレームURLも生成
+                    const timestamp = new Date().getTime()
+                    const newFrameUrl = `${API_URL}/videos/${videoId}/frame-at-time?time_ms=${timeMs}&t=${timestamp}`
+                    setCurrentFrameUrl(newFrameUrl)
+                  }}
+                  onFrameCapture={async (timeMs) => {
+                    // 現在のフレームでOCR分析を実行
+                    setCurrentFrameTime(timeMs)
+                    await handleReanalyzeFrame()
+                  }}
+                  className="h-full"
+                />
+              </div>
+            ) : (receipt.best_frame || currentFrameUrl) && (
               <div 
                 ref={imageContainerRef}
                 className="flex-1 min-h-0 relative bg-gray-900 overflow-hidden"
@@ -1032,8 +1050,8 @@ export default function ReceiptJournalModal({
               </div>
             )}
             <div className="px-1 pb-1">
-              {/* タイムライン表示 - 改善版 */}
-              {videoDuration > 0 && (
+              {/* タイムライン表示 - 静止画モードのみ表示 */}
+              {!useVideoPreview && videoDuration > 0 && (
                 <div className="bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-2 border border-gray-200">
                   <div className="flex items-center justify-between text-xs text-gray-700 mb-1">
                     <span className="font-medium">0.0s</span>
