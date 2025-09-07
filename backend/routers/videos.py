@@ -1449,12 +1449,33 @@ async def analyze_image(
                 
                 db.commit()
                 
+                # 作成された仕訳を取得
+                created_journal = db.query(JournalEntry).filter(
+                    JournalEntry.receipt_id == receipt.id
+                ).first()
+                
+                journal_data = None
+                if created_journal:
+                    journal_data = {
+                        "id": created_journal.id,
+                        "debit_account": created_journal.debit_account,
+                        "credit_account": created_journal.credit_account,
+                        "debit_amount": created_journal.debit_amount,
+                        "credit_amount": created_journal.credit_amount,
+                        "tax_account": created_journal.tax_account,
+                        "tax_amount": created_journal.tax_amount,
+                        "memo": created_journal.memo,
+                        "status": created_journal.status,
+                        "transaction_date": str(created_journal.transaction_date) if created_journal.transaction_date else None
+                    }
+                
                 return {
                     "success": True,
                     "receipt_data": receipt_data,
                     "receipt_id": receipt.id,
                     "frame_id": frame_obj.id,
                     "time_ms": time_ms,
+                    "journal": journal_data,
                     "message": "新しい領収書を作成しました"
                 }
             else:

@@ -527,6 +527,21 @@ export default function ReceiptJournalModal({
             best_frame_id: response.data.frame_id
           }
           
+          // 仕訳データも更新
+          if (response.data.journal) {
+            setJournalForm({
+              debit_account: response.data.journal.debit_account || '',
+              credit_account: response.data.journal.credit_account || '',
+              debit_amount: response.data.journal.debit_amount || 0,
+              credit_amount: response.data.journal.credit_amount || 0,
+              tax_account: response.data.journal.tax_account || '',
+              tax_amount: response.data.journal.tax_amount || 0,
+              memo: response.data.journal.memo || ''
+            })
+            setIsConfirmed(response.data.journal.status === 'confirmed')
+            setJournalInitialized(true)  // 初期化済みフラグを設定
+          }
+          
           // localReceipts配列に新しい領収書を追加
           const updatedReceipts = [...localReceipts, newReceipt]
           // 時間順にソート
