@@ -868,61 +868,89 @@ export default function ReceiptJournalModal({
                     {(currentFrameTime / 1000).toFixed(1)}s
                   </span>
                 </div>
-                <div className="flex gap-1">
-                  {/* 戻るボタン */}
-                  <div className="flex gap-0.5 bg-white rounded border p-0.5">
-                    <button
-                      onClick={() => handleFrameNavigation('prev', 'second')}
-                      disabled={isLoadingFrame}
-                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50"
-                      title="1秒戻る"
-                    >
-                      -1s
-                    </button>
-                    <button
-                      onClick={() => handleFrameNavigation('prev', 'halfSecond')}
-                      disabled={isLoadingFrame}
-                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50"
-                      title="0.5秒戻る"
-                    >
-                      -.5s
-                    </button>
-                    <button
-                      onClick={() => handleFrameNavigation('prev', 'frame')}
-                      disabled={isLoadingFrame}
-                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50"
-                      title="1フレーム戻る"
-                    >
-                      <ChevronLeftIcon className="h-3 w-3 text-gray-600" />
-                    </button>
+                <div className="flex gap-2">
+                  {/* 戻るボタングループ */}
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[10px] text-gray-500 text-center font-medium">◀ 戻る</span>
+                    <div className="flex gap-0.5 bg-white rounded-lg border border-gray-300 p-1 shadow-sm">
+                      <button
+                        onClick={() => handleFrameNavigation('prev', 'second')}
+                        disabled={isLoadingFrame}
+                        className="px-2 py-1 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50 transition-colors"
+                        title="1秒戻る"
+                      >
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] leading-none">1秒</span>
+                          <span className="text-[8px] text-gray-500">-1s</span>
+                        </div>
+                      </button>
+                      <div className="w-px bg-gray-200" />
+                      <button
+                        onClick={() => handleFrameNavigation('prev', 'halfSecond')}
+                        disabled={isLoadingFrame}
+                        className="px-2 py-1 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50 transition-colors"
+                        title="0.5秒戻る"
+                      >
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] leading-none">0.5秒</span>
+                          <span className="text-[8px] text-gray-500">-.5s</span>
+                        </div>
+                      </button>
+                      <div className="w-px bg-gray-200" />
+                      <button
+                        onClick={() => handleFrameNavigation('prev', 'frame')}
+                        disabled={isLoadingFrame}
+                        className="px-2 py-1 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50 transition-colors group"
+                        title="1フレーム戻る (約0.03秒)"
+                      >
+                        <div className="flex flex-col items-center">
+                          <ChevronLeftIcon className="h-4 w-4 text-gray-600 group-hover:text-blue-600" />
+                          <span className="text-[8px] text-gray-500">1フレーム</span>
+                        </div>
+                      </button>
+                    </div>
                   </div>
                   
-                  {/* 進むボタン */}
-                  <div className="flex gap-0.5 bg-white rounded border p-0.5">
-                    <button
-                      onClick={() => handleFrameNavigation('next', 'frame')}
-                      disabled={isLoadingFrame}
-                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50"
-                      title="1フレーム進む"
-                    >
-                      <ChevronRightIcon className="h-3 w-3 text-gray-600" />
-                    </button>
-                    <button
-                      onClick={() => handleFrameNavigation('next', 'halfSecond')}
-                      disabled={isLoadingFrame}
-                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50"
-                      title="0.5秒進む"
-                    >
-                      +.5s
-                    </button>
-                    <button
-                      onClick={() => handleFrameNavigation('next', 'second')}
-                      disabled={isLoadingFrame}
-                      className="px-1 py-0.5 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50"
-                      title="1秒進む"
-                    >
-                      +1s
-                    </button>
+                  {/* 進むボタングループ */}
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[10px] text-gray-500 text-center font-medium">進む ▶</span>
+                    <div className="flex gap-0.5 bg-white rounded-lg border border-gray-300 p-1 shadow-sm">
+                      <button
+                        onClick={() => handleFrameNavigation('next', 'frame')}
+                        disabled={isLoadingFrame}
+                        className="px-2 py-1 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50 transition-colors group"
+                        title="1フレーム進む (約0.03秒)"
+                      >
+                        <div className="flex flex-col items-center">
+                          <ChevronRightIcon className="h-4 w-4 text-gray-600 group-hover:text-blue-600" />
+                          <span className="text-[8px] text-gray-500">1フレーム</span>
+                        </div>
+                      </button>
+                      <div className="w-px bg-gray-200" />
+                      <button
+                        onClick={() => handleFrameNavigation('next', 'halfSecond')}
+                        disabled={isLoadingFrame}
+                        className="px-2 py-1 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50 transition-colors"
+                        title="0.5秒進む"
+                      >
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] leading-none">0.5秒</span>
+                          <span className="text-[8px] text-gray-500">+.5s</span>
+                        </div>
+                      </button>
+                      <div className="w-px bg-gray-200" />
+                      <button
+                        onClick={() => handleFrameNavigation('next', 'second')}
+                        disabled={isLoadingFrame}
+                        className="px-2 py-1 hover:bg-blue-50 rounded text-xs text-gray-700 font-medium disabled:opacity-50 transition-colors"
+                        title="1秒進む"
+                      >
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] leading-none">1秒</span>
+                          <span className="text-[8px] text-gray-500">+1s</span>
+                        </div>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
