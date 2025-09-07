@@ -26,6 +26,12 @@ class EmailService:
         self.app_name = "動画会計アプリ"
         self.app_url = os.getenv("FRONTEND_URL", "https://video-accounting-app.vercel.app")
         
+        # 初期化時に設定をログ出力
+        if self.smtp_user:
+            logger.info(f"EmailService初期化 - SMTP_HOST: {self.smtp_host}, SMTP_USER: {self.smtp_user[:10]}...")
+        else:
+            logger.warning("EmailService初期化 - SMTP設定が見つかりません")
+        
     def send_email(self, to_email: str, subject: str, html_content: str, text_content: Optional[str] = None) -> bool:
         """
         メールを送信する
@@ -46,11 +52,16 @@ class EmailService:
             part_html = MIMEText(html_content, 'html', 'utf-8')
             msg.attach(part_html)
             
+            # SMTP設定チェック
+            if not self.smtp_user or not self.smtp_password:
+                logger.error(f"SMTP認証情報が不足: SMTP_USER={bool(self.smtp_user)}, SMTP_PASSWORD={bool(self.smtp_password)}")
+                return False
+            
             # SMTP接続と送信
+            logger.info(f"SMTP接続開始: {self.smtp_host}:{self.smtp_port}")
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
                 server.starttls()  # TLS暗号化を有効化
-                if self.smtp_user and self.smtp_password:
-                    server.login(self.smtp_user, self.smtp_password)
+                server.login(self.smtp_user, self.smtp_password)
                 server.send_message(msg)
             
             logger.info(f"メール送信成功: {to_email}")

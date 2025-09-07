@@ -66,11 +66,24 @@ async def forgot_password(
         # メール送信を試みる
         email_sent = False
         try:
+            logger.info(f"メール送信開始: {user.email} (ユーザー: {user.username})")
+            
+            # 環境変数の確認
+            import os
+            smtp_user = os.getenv("SMTP_USER", "未設定")
+            logger.info(f"SMTP設定確認 - SMTP_USER: {smtp_user}")
+            
             email_sent = email_service.send_password_reset_email(
                 to_email=user.email,
                 reset_token=reset_token,
                 username=user.username
             )
+            
+            if email_sent:
+                logger.info(f"メール送信成功: {user.email}")
+            else:
+                logger.warning(f"メール送信失敗: {user.email}")
+                
         except Exception as e:
             logger.error(f"メール送信エラー: {e}")
         
