@@ -43,7 +43,7 @@ export default function ReceiptJournalModal({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [videoLoaded, setVideoLoaded] = useState(false)
   const [videoUrl, setVideoUrl] = useState<string>('')
-  const [currentFrameUrl, setCurrentFrameUrl] = useState<string>('')
+  // 이미지 URL 제거 - 비디오/캔버스만 사용
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [ocrPreviewData, setOcrPreviewData] = useState<any>(null)
   const [showOcrConfirmDialog, setShowOcrConfirmDialog] = useState(false)
@@ -84,12 +84,10 @@ export default function ReceiptJournalModal({
         setLastReceiptId(receipt.id)
         if (receipt.best_frame?.time_ms !== undefined) {
           setCurrentFrameTime(receipt.best_frame.time_ms)
-          // 이미지 URL 설정 제거 - 비디오/캔버스만 사용
-          
           // ビデオがロードされていたら、その時間にシーク
-          if (hiddenVideoRef.current && hiddenVideoRef.current.readyState >= 2) {
+          if (hiddenVideoRef.current && videoLoaded) {
             hiddenVideoRef.current.currentTime = receipt.best_frame.time_ms / 1000
-            setTimeout(() => captureVideoFrame(), 50)
+            // seekedイベントでキャプチャされるので、ここでは呼ばない
           }
         }
       }
@@ -171,28 +169,50 @@ export default function ReceiptJournalModal({
       const video = hiddenVideoRef.current
       console.log('🎬 Setting video src:', videoUrl)
       
+      // 既に同じURLが設定されている場合はスキップ
+      if (video.src === videoUrl) {
+        console.log('🎬 Video already loaded with this URL')
+        return
+      }
+      
       video.src = videoUrl
       video.crossOrigin = 'anonymous'
       
-      // ビデオが完全にロードされたら
-      video.oncanplaythrough = () => {
+      // ビデオが完全にロードされたら（一度だけ実行）
+      const handleCanPlayThrough = () => {
         console.log('🎬 Video can play through!')
         setVideoLoaded(true)
         
         // 初期位置にシーク
         if (receipt?.best_frame?.time_ms !== undefined) {
           video.currentTime = receipt.best_frame.time_ms / 1000
-          setTimeout(() => captureVideoFrame(), 100)
         }
       }
       
-      video.onerror = (e) => {
+      // シーク完了時にフレームをキャプチャ
+      const handleSeeked = () => {
+        console.log('🎬 Seek completed at', video.currentTime)
+        captureVideoFrame()
+      }
+      
+      const handleError = (e: Event) => {
         console.error('🎬 Video loading error:', e)
       }
       
+      video.addEventListener('canplaythrough', handleCanPlayThrough, { once: true })
+      video.addEventListener('seeked', handleSeeked)
+      video.addEventListener('error', handleError)
+      
       video.load()
+      
+      // クリーンアップ
+      return () => {
+        video.removeEventListener('canplaythrough', handleCanPlayThrough)
+        video.removeEventListener('seeked', handleSeeked)
+        video.removeEventListener('error', handleError)
+      }
     }
-  }, [videoUrl, receipt, captureVideoFrame])
+  }, [videoUrl, captureVideoFrame])
 
   // フレームナビゲーション関数（ビデオ直接制御版）
   const handleFrameNavigation = (direction: 'prev' | 'next', stepSize: 'frame' | 'second' | 'halfSecond' = 'frame') => {
@@ -211,19 +231,22 @@ export default function ReceiptJournalModal({
       : 1.0    // 1秒
     
     const newTime = direction === 'next' 
-      ? video.currentTime + step
+      ? Math.min(video.duration || Infinity, video.currentTime + step)
       : Math.max(0, video.currentTime - step)
     
     console.log(`🎬 Seeking from ${video.currentTime}s to ${newTime}s`)
     
-    // ビデオの再生位置を即座に変更
+    // ビデオの再生位置を変更
     video.currentTime = newTime
     setCurrentFrameTime(Math.round(newTime * 1000))
     
-    // フレームを即座にキャプチャ（遅延なし）
-    requestAnimationFrame(() => {
-      captureVideoFrame()
-    })
+    // seekedイベントでキャプチャされるので、ここでは即座にキャプチャを試みる
+    // ビデオがすでにその位置にある場合のため
+    if (Math.abs(video.currentTime - newTime) < 0.001) {
+      requestAnimationFrame(() => {
+        captureVideoFrame()
+      })
+    }
     
     const stepLabel = stepSize === 'frame' ? 'フレーム' : '秒'
     console.log(`${direction === 'next' ? '次' : '前'}の${stepLabel}: ${newTime}s`)
@@ -291,22 +314,22 @@ export default function ReceiptJournalModal({
         )
         
         if (response.data.success) {
-          // 新しいフレームURLに更新（完全に新しいURL）
-          const timestamp = new Date().getTime()
-          const newFrameUrl = `${API_URL}/videos/frames/${response.data.new_frame_id}/image?t=${timestamp}`
-          
-          console.log('Updating frame URL:', newFrameUrl)
-          setCurrentFrameUrl(newFrameUrl)
-          setIsLoadingFrame(true) // ローディング状態設定
+          // ビデオシーク位置を更新
+          const newTime = response.data.time_ms || currentFrameTime
+          if (hiddenVideoRef.current && videoLoaded) {
+            hiddenVideoRef.current.currentTime = newTime / 1000
+            // seekedイベントでキャプチャされる
+          }
           
           // receiptオブジェクトも更新（新しいフレーム情報で）
           if (receipt.best_frame) {
             receipt.best_frame.id = response.data.new_frame_id
-            receipt.best_frame.time_ms = response.data.time_ms || currentFrameTime
+            receipt.best_frame.time_ms = newTime
           }
           
           // 現在フレーム時間も更新
-          setCurrentFrameTime(response.data.time_ms || currentFrameTime)
+          setCurrentFrameTime(newTime)
+          setIsLoadingFrame(false)
           
           toast.success('OCRデータとフレームを適用しました')
         } else {
@@ -345,22 +368,22 @@ export default function ReceiptJournalModal({
         )
         
         if (response.data.success) {
-          // 新しいフレームURLに更新（完全に新しいURL）
-          const timestamp = new Date().getTime()
-          const newFrameUrl = `${API_URL}/videos/frames/${response.data.new_frame_id}/image?t=${timestamp}`
-          
-          console.log('Updating frame URL:', newFrameUrl)
-          setCurrentFrameUrl(newFrameUrl)
-          setIsLoadingFrame(true) // ローディング状態設定
+          // ビデオシーク位置を更新
+          const newTime = response.data.time_ms || currentFrameTime
+          if (hiddenVideoRef.current && videoLoaded) {
+            hiddenVideoRef.current.currentTime = newTime / 1000
+            // seekedイベントでキャプチャされる
+          }
           
           // receiptオブジェクトも更新（新しいフレーム情報で）
           if (receipt.best_frame) {
             receipt.best_frame.id = response.data.new_frame_id
-            receipt.best_frame.time_ms = response.data.time_ms || currentFrameTime
+            receipt.best_frame.time_ms = newTime
           }
           
           // 現在フレーム時間も更新
-          setCurrentFrameTime(response.data.time_ms || currentFrameTime)
+          setCurrentFrameTime(newTime)
+          setIsLoadingFrame(false)
           
           toast.success('OCRデータとフレームを適用しました')
         } else {
@@ -493,7 +516,11 @@ export default function ReceiptJournalModal({
     const targetReceipt = localReceipts.find(r => r.id === targetReceiptId)
     if (targetReceipt?.best_frame) {
       setCurrentFrameTime(targetReceipt.best_frame.time_ms)
-      setCurrentFrameUrl(`${API_URL}/videos/frames/${targetReceipt.best_frame.id}/image`)
+      // ビデオシーク
+      if (hiddenVideoRef.current && videoLoaded) {
+        hiddenVideoRef.current.currentTime = targetReceipt.best_frame.time_ms / 1000
+        // seekedイベントでキャプチャされる
+      }
     }
     
     if (onReceiptChange) {
@@ -1127,10 +1154,11 @@ export default function ReceiptJournalModal({
                       const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100))
                       const newTime = Math.floor((percentage / 100) * videoDuration * 1000)
                       setCurrentFrameTime(newTime)
-                      setIsLoadingFrame(true)
-                      const timestamp = new Date().getTime()
-                      const newFrameUrl = `${API_URL}/videos/${videoId}/frame-at-time?time_ms=${newTime}&t=${timestamp}`
-                      setCurrentFrameUrl(newFrameUrl)
+                      // ビデオシーク
+                      if (hiddenVideoRef.current && videoLoaded) {
+                        hiddenVideoRef.current.currentTime = newTime / 1000
+                        // seekedイベントでキャプチャされる
+                      }
                     }}
                   >
                     {/* 背景グラデーション効果 */}
