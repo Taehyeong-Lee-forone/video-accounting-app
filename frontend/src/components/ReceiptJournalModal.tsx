@@ -39,6 +39,7 @@ export default function ReceiptJournalModal({
   const [isConfirmed, setIsConfirmed] = useState(false)
   const [currentFrameTime, setCurrentFrameTime] = useState<number>(0)
   const [isLoadingFrame, setIsLoadingFrame] = useState(false)
+  const [hoverTime, setHoverTime] = useState<number | null>(null)
   const hiddenVideoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [videoLoaded, setVideoLoaded] = useState(false)
@@ -1172,35 +1173,33 @@ export default function ReceiptJournalModal({
                   {/* メインタイムライン */}
                   <div className="relative group">
                     {/* ホバー時の時間表示 */}
-                    <div 
-                      className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-30"
-                      style={{ 
-                        left: 'var(--hover-position, 0%)',
-                        transform: 'translateX(-50%)'
-                      }}
-                    >
-                      <div className="bg-slate-800/90 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md">
-                        <span className="hover-time font-light">0:00</span>
+                    {hoverTime !== null && (
+                      <div 
+                        className="absolute -top-8 opacity-100 transition-all duration-300 pointer-events-none z-30"
+                        style={{ 
+                          left: `${(hoverTime / videoDuration) * 100}%`,
+                          transform: 'translateX(-50%)'
+                        }}
+                      >
+                        <div className="bg-slate-800/90 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md">
+                          <span className="font-light">
+                            {Math.floor(hoverTime / 60)}:{Math.floor(hoverTime % 60).toString().padStart(2, '0')}
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                    )}
                     
                     <div 
                       className="relative h-1 bg-gray-200/60 rounded-full overflow-hidden cursor-pointer group-hover:h-1.5 transition-all duration-300"
                       onMouseMove={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect()
                         const x = e.clientX - rect.left
-                        const percentage = (x / rect.width) * 100
-                        e.currentTarget.style.setProperty('--hover-position', `${percentage}%`)
-                        const hoverTime = (percentage / 100) * videoDuration
-                        const hoverTimeEl = e.currentTarget.querySelector('.hover-time') as HTMLElement
-                        if (hoverTimeEl) {
-                          const minutes = Math.floor(hoverTime / 60)
-                          const seconds = Math.floor(hoverTime % 60)
-                          hoverTimeEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`
-                        }
+                        const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100))
+                        const time = (percentage / 100) * videoDuration
+                        setHoverTime(time)
                       }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.setProperty('--hover-position', '-100%')
+                      onMouseLeave={() => {
+                        setHoverTime(null)
                       }}
                       onClick={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect()
@@ -1284,12 +1283,14 @@ export default function ReceiptJournalModal({
                       </div>
                       
                       {/* ホバー位置インジケーター */}
-                      <div 
-                        className="absolute top-0 bottom-0 w-px bg-slate-400/30 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                        style={{ 
-                          left: 'var(--hover-position, -100%)'
-                        }}
-                      />
+                      {hoverTime !== null && (
+                        <div 
+                          className="absolute top-0 bottom-0 w-px bg-slate-400/30 opacity-100 transition-opacity pointer-events-none"
+                          style={{ 
+                            left: `${(hoverTime / videoDuration) * 100}%`
+                          }}
+                        />
+                      )}
                     </div>
                   </div>
                   
@@ -1297,7 +1298,7 @@ export default function ReceiptJournalModal({
                   <div className="flex items-center gap-6 mt-4">
                     <div className="flex items-center gap-2">
                       <div className="w-2.5 h-2.5 bg-amber-400 rounded-full" />
-                      <span className="text-xs text-gray-500 font-light">現在</span>
+                      <span className="text-xs text-gray-500 font-light">選択中</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full" />
