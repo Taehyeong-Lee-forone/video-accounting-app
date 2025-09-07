@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
 
     try {
       // バックエンドAPIを呼び出す
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/api/auth/forgot-password`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/auth/forgot-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

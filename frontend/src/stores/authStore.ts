@@ -40,10 +40,10 @@ export const useAuthStore = create<AuthState>()(
           formData.append('username', username);
           formData.append('password', password);
 
-          console.log('📤 Sending login request to:', `${API_BASE_URL}/api/auth/login`);
+          console.log('📤 Sending login request to:', `${API_BASE_URL}/auth/login`);
           
           const response = await axios.post(
-            `${API_BASE_URL}/api/auth/login`,
+            `${API_BASE_URL}/auth/login`,
             formData,
             {
               headers: {
@@ -55,7 +55,7 @@ export const useAuthStore = create<AuthState>()(
           const { access_token, refresh_token } = response.data;
 
           // ユーザー情報取得
-          const userResponse = await axios.get(`${API_BASE_URL}/api/auth/me`, {
+          const userResponse = await axios.get(`${API_BASE_URL}/auth/me`, {
             headers: {
               Authorization: `Bearer ${access_token}`,
             },
@@ -77,7 +77,7 @@ export const useAuthStore = create<AuthState>()(
             status: error.response?.status,
             data: error.response?.data,
             message: error.message,
-            url: `${API_BASE_URL}/api/auth/login`,
+            url: `${API_BASE_URL}/auth/login`,
             config: error.config
           });
           
@@ -115,7 +115,7 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           const response = await axios.post(
-            `${API_BASE_URL}/api/auth/refresh`,
+            `${API_BASE_URL}/auth/refresh`,
             { refresh_token: refreshToken }
           );
 
@@ -137,7 +137,7 @@ export const useAuthStore = create<AuthState>()(
         }
 
         try {
-          const response = await axios.get(`${API_BASE_URL}/api/auth/me`, {
+          const response = await axios.get(`${API_BASE_URL}/auth/me`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
