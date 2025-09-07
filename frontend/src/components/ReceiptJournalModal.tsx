@@ -311,6 +311,8 @@ export default function ReceiptJournalModal({
   // OCRデータ直接適用（ダイアログなし）
   const handleApplyOcrDataDirect = async (data: any) => {
     if (data && receipt) {
+      console.log('📝 OCRデータを適用中:', data)
+      
       // OCRデータを領収書フォームに適用
       const updatedReceiptForm = {
         vendor: data.vendor || '',
@@ -325,24 +327,30 @@ export default function ReceiptJournalModal({
         memo: data.memo || ''
       }
       setReceiptForm(updatedReceiptForm)
+      console.log('📋 領収書フォーム更新:', updatedReceiptForm)
       
       // 仕訳データも同時に更新
       const taxIncluded = updatedReceiptForm.total || 0
       const taxAmount = updatedReceiptForm.tax || 0
       const taxExcluded = taxIncluded - taxAmount
       
-      setJournalForm((prev: any) => ({
-        ...prev,
-        date: updatedReceiptForm.issue_date || prev.date,
-        debit_account: prev.debit_account || '現金',
-        credit_account: prev.credit_account || '売上高',
-        description: updatedReceiptForm.vendor || prev.description,
+      const updatedJournalForm = {
+        date: updatedReceiptForm.issue_date || journalForm.date,
+        debit_account: journalForm.debit_account || '現金',
+        credit_account: journalForm.credit_account || '売上高',
+        description: updatedReceiptForm.vendor || journalForm.description,
         amount: taxExcluded,
         tax_type: taxAmount > 0 ? '10%' : '0%',
         tax_amount: taxAmount,
         total_amount: taxIncluded,
-        memo: updatedReceiptForm.memo || prev.memo
-      }))
+        memo: updatedReceiptForm.memo || journalForm.memo
+      }
+      
+      console.log('📊 仕訳フォーム更新前:', journalForm)
+      console.log('📊 仕訳フォーム更新後:', updatedJournalForm)
+      
+      // 仕訳フォームを完全に置き換える
+      setJournalForm(updatedJournalForm)
       
       // フレームも更新（現在表示中のフレームへ）
       try {
@@ -404,18 +412,20 @@ export default function ReceiptJournalModal({
       const taxAmount = updatedReceiptForm.tax || 0
       const taxExcluded = taxIncluded - taxAmount
       
-      setJournalForm((prev: any) => ({
-        ...prev,
-        date: updatedReceiptForm.issue_date || prev.date,
-        debit_account: prev.debit_account || '現金',
-        credit_account: prev.credit_account || '売上高',
-        description: updatedReceiptForm.vendor || prev.description,
+      const updatedJournalForm = {
+        date: updatedReceiptForm.issue_date || journalForm.date,
+        debit_account: journalForm.debit_account || '現金',
+        credit_account: journalForm.credit_account || '売上高',
+        description: updatedReceiptForm.vendor || journalForm.description,
         amount: taxExcluded,
         tax_type: taxAmount > 0 ? '10%' : '0%',
         tax_amount: taxAmount,
         total_amount: taxIncluded,
-        memo: updatedReceiptForm.memo || prev.memo
-      }))
+        memo: updatedReceiptForm.memo || journalForm.memo
+      }
+      
+      // 仕訳フォームを完全に置き換える
+      setJournalForm(updatedJournalForm)
       
       // フレームも更新（現在表示中のフレームへ）
       try {
