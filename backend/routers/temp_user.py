@@ -72,18 +72,34 @@ async def list_users(db: Session = Depends(get_db)):
     登録済みユーザー一覧
     """
     try:
-        users = db.query(User).all()
+        from sqlalchemy import text
+        # Raw SQLでreset_token情報も取得
+        result = db.execute(text("""
+            SELECT id, email, username, is_active, 
+                   reset_token IS NOT NULL as has_token,
+                   reset_token_expires,
+                   CASE 
+                     WHEN reset_token IS NOT NULL THEN SUBSTRING(reset_token, 1, 10) || '...'
+                     ELSE NULL
+                   END as token_preview
+            FROM users
+            ORDER BY id
+        """)).fetchall()
+        
         return {
             "users": [
                 {
-                    "id": user.id,
-                    "email": user.email,
-                    "username": user.username,
-                    "is_active": user.is_active
+                    "id": row.id,
+                    "email": row.email,
+                    "username": row.username,
+                    "is_active": row.is_active,
+                    "has_token": row.has_token,
+                    "token_expires": str(row.reset_token_expires) if row.reset_token_expires else None,
+                    "token_preview": row.token_preview
                 }
-                for user in users
+                for row in result
             ],
-            "total": len(users)
+            "total": len(result)
         }
     except Exception as e:
         logger.error(f"ユーザー一覧取得エラー: {e}")
