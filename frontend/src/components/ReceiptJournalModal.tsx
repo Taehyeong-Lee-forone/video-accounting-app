@@ -331,7 +331,7 @@ export default function ReceiptJournalModal({
       const taxAmount = updatedReceiptForm.tax || 0
       const taxExcluded = taxIncluded - taxAmount
       
-      setJournalForm(prev => ({
+      setJournalForm((prev: any) => ({
         ...prev,
         date: updatedReceiptForm.issue_date || prev.date,
         debit_account: prev.debit_account || '現金',
@@ -404,7 +404,7 @@ export default function ReceiptJournalModal({
       const taxAmount = updatedReceiptForm.tax || 0
       const taxExcluded = taxIncluded - taxAmount
       
-      setJournalForm(prev => ({
+      setJournalForm((prev: any) => ({
         ...prev,
         date: updatedReceiptForm.issue_date || prev.date,
         debit_account: prev.debit_account || '現金',
