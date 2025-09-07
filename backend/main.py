@@ -33,8 +33,34 @@ async def lifespan(app: FastAPI):
         
         # マイグレーション実行（新しいカラムを追加）
         try:
-            from migrate_db import add_reset_token_columns
-            add_reset_token_columns()
+            from sqlalchemy import text
+            with engine.connect() as conn:
+                # PostgreSQL用
+                if "postgresql" in str(engine.url) or "postgres" in str(engine.url):
+                    logger.info("PostgreSQL: reset_tokenカラムを追加中...")
+                    try:
+                        conn.execute(text("""
+                            ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255)
+                        """))
+                        conn.execute(text("""
+                            ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP WITH TIME ZONE
+                        """))
+                        conn.commit()
+                        logger.info("PostgreSQL: カラム追加完了")
+                    except Exception as e:
+                        logger.info(f"カラム追加スキップ（既存の可能性）: {e}")
+                # SQLite用
+                else:
+                    try:
+                        conn.execute(text("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)"))
+                        conn.commit()
+                    except:
+                        pass
+                    try:
+                        conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expires DATETIME"))
+                        conn.commit()
+                    except:
+                        pass
             logger.info("マイグレーション完了")
         except Exception as e:
             logger.warning(f"マイグレーションスキップ: {e}")
