@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
         
         # 初回起動時のadminユーザー作成
         from sqlalchemy.orm import Session
-        from models import User
+        from models import User, PasswordResetToken  # PasswordResetTokenも明示的にインポート
         from passlib.context import CryptContext
         
         pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')

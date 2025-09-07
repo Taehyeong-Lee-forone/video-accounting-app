@@ -71,6 +71,8 @@ async def forgot_password(
         db.add(token_record)
         db.commit()
         
+        logger.info(f"トークン保存完了: token={reset_token[:10]}..., user_id={user.id}, expires_at={token_record.expires_at}")
+        
         # メール送信を試みる
         email_sent = False
         try:
@@ -189,20 +191,31 @@ async def verify_reset_token(token: str, db: Session = Depends(get_db)):
     """
     リセットトークンの有効性を確認
     """
+    logger.info(f"トークン検証開始: token={token[:10] if token else 'None'}...")
+    
+    # すべてのトークンを確認（デバッグ用）
+    all_tokens = db.query(PasswordResetToken).all()
+    logger.info(f"データベース内のトークン数: {len(all_tokens)}")
+    for t in all_tokens[:5]:  # 最初の5件だけログ出力
+        logger.info(f"  - Token: {t.token[:10]}..., Used: {t.used}, Expires: {t.expires_at}")
+    
     token_record = db.query(PasswordResetToken).filter(
         PasswordResetToken.token == token,
         PasswordResetToken.used == False
     ).first()
     
     if not token_record:
+        logger.warning(f"トークンが見つかりません: token={token[:10] if token else 'None'}...")
         return {"valid": False, "message": "無効なトークンです"}
     
     if datetime.now() > token_record.expires_at:
         # 期限切れトークンを使用済みにマーク
+        logger.warning(f"トークン期限切れ: expires_at={token_record.expires_at}, now={datetime.now()}")
         token_record.used = True
         db.commit()
         return {"valid": False, "message": "トークンの有効期限が切れています"}
     
+    logger.info(f"トークン有効: user_email={token_record.user.email}")
     return {
         "valid": True,
         "email": token_record.user.email,

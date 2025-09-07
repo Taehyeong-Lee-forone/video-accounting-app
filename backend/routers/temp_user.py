@@ -88,3 +88,27 @@ async def list_users(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"ユーザー一覧取得エラー: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/temp/create-tables")
+async def create_tables():
+    """
+    データベーステーブルを強制作成
+    """
+    try:
+        from database import engine, Base
+        from models import User, PasswordResetToken  # 明示的にインポート
+        
+        # テーブル作成
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+        
+        return {
+            "success": True,
+            "message": "テーブル作成完了",
+            "tables": [table.name for table in Base.metadata.sorted_tables]
+        }
+    except Exception as e:
+        logger.error(f"テーブル作成エラー: {e}")
+        return {
+            "success": False,
+            "message": str(e)
+        }
