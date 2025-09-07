@@ -95,8 +95,11 @@ export default function ReceiptJournalModal({
     }
   }, [receipt, lastReceiptId])
 
+  // 仕訳データの初期設定（初回のみ）
+  const [journalInitialized, setJournalInitialized] = useState(false)
+  
   useEffect(() => {
-    if (journal) {
+    if (journal && !journalInitialized) {
       setJournalForm({
         debit_account: journal.debit_account || '',
         credit_account: journal.credit_account || '',
@@ -108,10 +111,11 @@ export default function ReceiptJournalModal({
       })
       // journalのstatusが'confirmed'か確認
       setIsConfirmed(journal.status === 'confirmed')
-    } else {
+      setJournalInitialized(true)
+    } else if (!journal) {
       setIsConfirmed(false)
     }
-  }, [journal])
+  }, [journal, journalInitialized])
   
   // ビデオフレームをcanvasにキャプチャ（最適化版）
   const captureVideoFrame = useCallback(() => {
@@ -338,11 +342,11 @@ export default function ReceiptJournalModal({
         date: updatedReceiptForm.issue_date || journalForm.date,
         debit_account: journalForm.debit_account || '現金',
         credit_account: journalForm.credit_account || '売上高',
-        description: updatedReceiptForm.vendor || journalForm.description,
-        amount: taxExcluded,
-        tax_type: taxAmount > 0 ? '10%' : '0%',
+        debit_amount: taxIncluded,  // 借方金額（税込）
+        credit_amount: taxIncluded,  // 貸方金額（税込）
+        tax_account: journalForm.tax_account || '仮受消費税',
         tax_amount: taxAmount,
-        total_amount: taxIncluded,
+        description: updatedReceiptForm.vendor || journalForm.description,
         memo: updatedReceiptForm.memo || journalForm.memo
       }
       
@@ -416,11 +420,11 @@ export default function ReceiptJournalModal({
         date: updatedReceiptForm.issue_date || journalForm.date,
         debit_account: journalForm.debit_account || '現金',
         credit_account: journalForm.credit_account || '売上高',
-        description: updatedReceiptForm.vendor || journalForm.description,
-        amount: taxExcluded,
-        tax_type: taxAmount > 0 ? '10%' : '0%',
+        debit_amount: taxIncluded,  // 借方金額（税込）
+        credit_amount: taxIncluded,  // 貸方金額（税込）
+        tax_account: journalForm.tax_account || '仮受消費税',
         tax_amount: taxAmount,
-        total_amount: taxIncluded,
+        description: updatedReceiptForm.vendor || journalForm.description,
         memo: updatedReceiptForm.memo || journalForm.memo
       }
       
