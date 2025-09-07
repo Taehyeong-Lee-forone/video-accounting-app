@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { XMarkIcon, CheckIcon, XCircleIcon, PencilIcon, ChevronLeftIcon, ChevronRightIcon, CameraIcon, PlusIcon, TrashIcon, ClockIcon } from '@heroicons/react/24/outline'
-import VideoFrameSelector from './VideoFrameSelector'
 import toast from 'react-hot-toast'
 import { api, API_URL } from '@/lib/api'
 
@@ -52,7 +51,6 @@ export default function ReceiptJournalModal({
   const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 })  // 画像位置
   const [isDragging, setIsDragging] = useState(false)  // ドラッグ状態
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })  // ドラッグ開始位置
-  const [useVideoPreview, setUseVideoPreview] = useState(true)  // 動画プレビューを使用
   const [confirmAnimating, setConfirmAnimating] = useState(false)  // 確認アニメーション状態
   const imageContainerRef = useRef<HTMLDivElement>(null)
 
@@ -749,8 +747,8 @@ export default function ReceiptJournalModal({
           {/* 左側: 領収書画像 */}
           <div className="flex-1 border-r bg-gray-50 flex flex-col min-w-0">
             <div className="space-y-1 p-1">
-              {/* フレーム制御ボタン - 静止画モードのみ表示 */}
-              {!useVideoPreview && (
+              {/* フレーム制御ボタン */}
+              {
               <div className="bg-white rounded p-1 border">
                 <div className="flex items-center justify-between mb-0.5">
                   <span className="text-xs font-medium text-gray-700">フレーム</span>
@@ -816,7 +814,7 @@ export default function ReceiptJournalModal({
                   </div>
                 </div>
               </div>
-              )}
+              }
               
               {/* OCR分析オプション - コンパクトUI */}
               <div className="bg-blue-50 rounded p-1 border border-blue-200">
@@ -883,43 +881,9 @@ export default function ReceiptJournalModal({
               </div>
             </div>
             
-            {/* 動画/画像切り替えボタン */}
-            <div className="px-1 pb-1">
-              <button
-                onClick={() => setUseVideoPreview(!useVideoPreview)}
-                className={`w-full px-2 py-1 text-xs font-medium rounded transition-colors ${
-                  useVideoPreview 
-                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                    : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
-                }`}
-              >
-                {useVideoPreview ? '🎬 動画プレビューモード' : '🖼️ 静止画モード'}
-              </button>
-            </div>
             
-            {/* 動画プレビューまたは静止画表示 */}
-            {useVideoPreview ? (
-              <div className="flex-1 min-h-0 p-2">
-                <VideoFrameSelector
-                  videoId={videoId}
-                  currentTimeMs={currentFrameTime}
-                  duration={videoDuration}
-                  onTimeChange={(timeMs) => {
-                    setCurrentFrameTime(timeMs)
-                    // フレーム時間が変更されたら新しいフレームURLも生成
-                    const timestamp = new Date().getTime()
-                    const newFrameUrl = `${API_URL}/videos/${videoId}/frame-at-time?time_ms=${timeMs}&t=${timestamp}`
-                    setCurrentFrameUrl(newFrameUrl)
-                  }}
-                  onFrameCapture={async (timeMs) => {
-                    // 現在のフレームでOCR分析を実行
-                    setCurrentFrameTime(timeMs)
-                    await handleReanalyzeFrame()
-                  }}
-                  className="h-full"
-                />
-              </div>
-            ) : (receipt.best_frame || currentFrameUrl) && (
+            {/* 静止画表示 */}
+            {(receipt.best_frame || currentFrameUrl) && (
               <div 
                 ref={imageContainerRef}
                 className="flex-1 min-h-0 relative bg-gray-900 overflow-hidden"
@@ -1050,8 +1014,8 @@ export default function ReceiptJournalModal({
               </div>
             )}
             <div className="px-1 pb-1">
-              {/* タイムライン表示 - 静止画モードのみ表示 */}
-              {!useVideoPreview && videoDuration > 0 && (
+              {/* タイムライン表示 */}
+              {videoDuration > 0 && (
                 <div className="bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-2 border border-gray-200">
                   <div className="flex items-center justify-between text-xs text-gray-700 mb-1">
                     <span className="font-medium">0.0s</span>
