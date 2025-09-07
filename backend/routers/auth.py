@@ -191,8 +191,8 @@ async def login(
             )
     
     # トークン作成
-    access_token = create_access_token(data={"sub": user.username})
-    refresh_token = create_refresh_token(data={"sub": user.username})
+    access_token = create_access_token(data={"sub": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
     return {
         "access_token": access_token,
@@ -208,18 +208,18 @@ async def refresh_token(
     """トークンリフレッシュ"""
     try:
         payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        user_id: str = payload.get("sub")
+        if user_id is None:
             raise HTTPException(status_code=401, detail="無効なトークン")
     except JWTError:
         raise HTTPException(status_code=401, detail="無効なトークン")
     
-    user = db.query(User).filter(User.username == username).first()
+    user = db.query(User).filter(User.id == int(user_id)).first()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="ユーザーが見つかりません")
     
     # 新しいアクセストークン作成
-    access_token = create_access_token(data={"sub": user.username})
+    access_token = create_access_token(data={"sub": str(user.id)})
     
     return {
         "access_token": access_token,
