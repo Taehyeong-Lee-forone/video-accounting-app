@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { XMarkIcon, CheckIcon, XCircleIcon, PencilIcon, ChevronLeftIcon, ChevronRightIcon, CameraIcon, PlusIcon, TrashIcon, ClockIcon } from '@heroicons/react/24/outline'
@@ -39,7 +39,8 @@ export default function ReceiptJournalModal({
   const [isConfirmed, setIsConfirmed] = useState(false)
   const [currentFrameTime, setCurrentFrameTime] = useState<number>(0)
   const [isLoadingFrame, setIsLoadingFrame] = useState(false)
-  const [preloadedImages, setPreloadedImages] = useState<Map<number, string>>(new Map())
+  const hiddenVideoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const [currentFrameUrl, setCurrentFrameUrl] = useState<string>('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [ocrPreviewData, setOcrPreviewData] = useState<any>(null)
@@ -82,8 +83,12 @@ export default function ReceiptJournalModal({
         if (receipt.best_frame?.time_ms !== undefined) {
           setCurrentFrameTime(receipt.best_frame.time_ms)
           setCurrentFrameUrl(`${API_URL}/videos/frames/${receipt.best_frame.id}/image`)
-          // 周辺フレームをプリロード
-          preloadFrameImages(receipt.best_frame.time_ms)
+          
+          // ビデオがロードされていたら、その時間にシーク
+          if (hiddenVideoRef.current && hiddenVideoRef.current.readyState >= 2) {
+            hiddenVideoRef.current.currentTime = receipt.best_frame.time_ms / 1000
+            captureVideoFrame()
+          }
         }
       }
     }
@@ -106,77 +111,103 @@ export default function ReceiptJournalModal({
       setIsConfirmed(false)
     }
   }, [journal])
-
-  // フレームURLをプリロード
-  const preloadFrameImages = (currentTime: number) => {
-    if (!videoId) return
-    
-    const times = [
-      currentTime - 1000,  // 1秒前
-      currentTime - 500,   // 0.5秒前
-      currentTime - 33,    // 1フレーム前
-      currentTime + 33,    // 1フレーム後
-      currentTime + 500,   // 0.5秒後
-      currentTime + 1000   // 1秒後
-    ].filter(t => t >= 0)  // 負の値を除外
-    
-    times.forEach(time => {
-      if (!preloadedImages.has(time)) {
-        const img = new Image()
-        img.src = `${API_URL}/videos/${videoId}/frame-at-time?time_ms=${time}`
-        // キャッシュに保存
-        setPreloadedImages(prev => new Map(prev).set(time, img.src))
-      }
-    })
-  }
-
-  // フレームナビゲーション関数（最適化版）
-  const handleFrameNavigation = (direction: 'prev' | 'next', stepSize: 'frame' | 'second' | 'halfSecond' = 'frame') => {
-    if (!videoId) return
-    
-    // 移動単位設定
-    const step = stepSize === 'frame' 
-      ? 33  // 30fps基準で1フレーム（約33ms）
-      : stepSize === 'halfSecond'
-      ? 500  // 0.5秒（500ms）
-      : 1000 // 1秒（1000ms）
-    
-    const calculatedTime = direction === 'next' 
-      ? currentFrameTime + step
-      : currentFrameTime - step
-    
-    // 0未満にしようとしたら0に設定
-    const newTime = Math.max(0, calculatedTime)
-    
-    // 既に0秒にいて後ろに戻ろうとしたら実行しない
-    if (currentFrameTime === 0 && direction === 'prev') {
-      console.log('Already at 0ms')
-      return
+  
+  // ビデオをロードして初期フレームを表示
+  useEffect(() => {
+    if (isOpen && videoId && hiddenVideoRef.current) {
+      const video = hiddenVideoRef.current
+      
+      // ビデオファイル名を取得（videosテーブルのlocal_pathから）
+      api.get(`/videos/${videoId}`).then(response => {
+        const videoPath = response.data.local_path
+        const filename = videoPath?.split('/').pop()
+        if (filename) {
+          const videoUrl = `${API_URL}/videos/stream/${filename}`
+          
+          // ビデオのURLが変わった場合のみ再ロード
+          if (video.src !== videoUrl) {
+            video.src = videoUrl
+            video.load()
+          }
+          
+          // メタデータがロードされたら初期位置にシーク
+          video.onloadedmetadata = () => {
+            if (receipt?.best_frame?.time_ms !== undefined) {
+              video.currentTime = receipt.best_frame.time_ms / 1000
+              // シーク完了後にフレームをキャプチャ
+              video.onseeked = () => {
+                captureVideoFrame()
+              }
+            }
+          }
+        }
+      }).catch(error => {
+        console.error('Failed to get video info:', error)
+      })
     }
     
-    // キャッシュからURLを取得するか、新しく生成（タイムスタンプなし）
-    const cachedUrl = preloadedImages.get(newTime)
-    const newFrameUrl = cachedUrl || `${API_URL}/videos/${videoId}/frame-at-time?time_ms=${newTime}`
-    
-    // キャッシュにない場合のみローディング表示
-    if (!cachedUrl) {
-      setIsLoadingFrame(true)
-      // 新しい画像を読み込み
+    // 初期画像がある場合はcanvasに描画
+    if (isOpen && !hiddenVideoRef.current?.src && receipt?.best_frame?.id && canvasRef.current) {
       const img = new Image()
-      img.onload = () => setIsLoadingFrame(false)
-      img.onerror = () => setIsLoadingFrame(false)
-      img.src = newFrameUrl
+      img.onload = () => {
+        const canvas = canvasRef.current
+        if (canvas) {
+          const ctx = canvas.getContext('2d')
+          if (ctx) {
+            canvas.width = img.width
+            canvas.height = img.height
+            ctx.drawImage(img, 0, 0)
+          }
+        }
+      }
+      img.src = `${API_URL}/videos/frames/${receipt.best_frame.id}/image`
     }
+  }, [isOpen, videoId, receipt, captureVideoFrame])
+
+  // ビデオフレームをcanvasにキャプチャ
+  const captureVideoFrame = useCallback(() => {
+    if (!hiddenVideoRef.current || !canvasRef.current) return
     
-    // フレーム時間とURLを即座に更新
-    setCurrentFrameTime(newTime)
-    setCurrentFrameUrl(newFrameUrl)
+    const video = hiddenVideoRef.current
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
     
-    // 次のフレームをプリロード
-    preloadFrameImages(newTime)
+    if (!ctx) return
+    
+    // canvasサイズをビデオサイズに合わせる
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    
+    // ビデオフレームをcanvasに描画
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+  }, [])
+
+  // フレームナビゲーション関数（ビデオ直接制御版）
+  const handleFrameNavigation = (direction: 'prev' | 'next', stepSize: 'frame' | 'second' | 'halfSecond' = 'frame') => {
+    if (!hiddenVideoRef.current) return
+    
+    const video = hiddenVideoRef.current
+    
+    // 移動単位設定（秒単位）
+    const step = stepSize === 'frame' 
+      ? 0.033  // 30fps基準で1フレーム（約33ms）
+      : stepSize === 'halfSecond'
+      ? 0.5    // 0.5秒
+      : 1.0    // 1秒
+    
+    const newTime = direction === 'next' 
+      ? video.currentTime + step
+      : Math.max(0, video.currentTime - step)
+    
+    // ビデオの再生位置を即座に変更
+    video.currentTime = newTime
+    setCurrentFrameTime(Math.round(newTime * 1000))
+    
+    // フレームをキャプチャ
+    captureVideoFrame()
     
     const stepLabel = stepSize === 'frame' ? 'フレーム' : '秒'
-    console.log(`${direction === 'next' ? '次' : '前'}の${stepLabel}: ${newTime}ms`)
+    console.log(`${direction === 'next' ? '次' : '前'}の${stepLabel}: ${newTime}s`)
   }
 
   // 現在フレームでOCR再分析（プレビュー）
@@ -916,8 +947,16 @@ export default function ReceiptJournalModal({
             </div>
             
             
-            {/* 静止画表示 */}
-            {(receipt.best_frame || currentFrameUrl) && (
+            {/* ビデオ要素（非表示） */}
+            <video
+              ref={hiddenVideoRef}
+              style={{ display: 'none' }}
+              crossOrigin="anonymous"
+              preload="metadata"
+            />
+            
+            {/* Canvasでフレーム表示 */}
+            {(
               <div 
                 ref={imageContainerRef}
                 className="flex-1 min-h-0 relative bg-gray-900 overflow-hidden"
@@ -931,11 +970,9 @@ export default function ReceiptJournalModal({
                   }
                 }}
               >
-                <img 
-                  key={currentFrameUrl || receipt.best_frame?.id}  // key追加で強制再レンダリング
-                  src={currentFrameUrl || `${API_URL}/videos/frames/${receipt.best_frame.id}/image`}
-                  alt="Receipt"
-                  className={`absolute ${imageViewMode === 'contain' ? 'object-contain' : 'object-cover'} ${isLoadingFrame ? 'opacity-50' : ''} ${zoomLevel > 1 ? 'cursor-move' : 'cursor-default'}`}
+                <canvas
+                  ref={canvasRef}
+                  className={`absolute ${imageViewMode === 'contain' ? 'object-contain' : 'object-cover'} ${zoomLevel > 1 ? 'cursor-move' : 'cursor-default'}`}
                   style={{
                     width: `${100 * zoomLevel}%`,
                     height: `${100 * zoomLevel}%`,
@@ -964,12 +1001,6 @@ export default function ReceiptJournalModal({
                   }}
                   onMouseUp={() => setIsDragging(false)}
                   onMouseLeave={() => setIsDragging(false)}
-                  onLoad={() => {
-                    // ローディング状態はhandleFrameNavigationで管理
-                  }}
-                  onError={() => {
-                    toast.error('フレーム画像の読み込みに失敗しました')
-                  }}
                 />
                 {isLoadingFrame && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30">
