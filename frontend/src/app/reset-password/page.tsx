@@ -39,7 +39,7 @@ function ResetPasswordForm() {
       console.log('Response status:', response.status)
       
       const data = await response.json()
-      console.log('Response data:', data)
+      console.log('Response data:', JSON.stringify(data, null, 2))
       
       if (data.valid) {
         setIsTokenValid(true)

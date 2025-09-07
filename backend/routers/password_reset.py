@@ -54,8 +54,9 @@ async def forgot_password(
         reset_token = secrets.token_urlsafe(32)
         
         # トークンをユーザーレコードに保存（24時間有効）
+        from datetime import timezone
         user.reset_token = reset_token
-        user.reset_token_expires = datetime.now() + timedelta(hours=24)
+        user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=24)
         db.commit()
         
         logger.info(f"トークン保存完了: token={reset_token[:10]}..., user_id={user.id}, expires_at={user.reset_token_expires}")
@@ -135,7 +136,9 @@ async def reset_password(
             )
         
         # 有効期限をチェック
-        if not result.reset_token_expires or datetime.now() > result.reset_token_expires:
+        from datetime import timezone
+        current_time = datetime.now(timezone.utc)
+        if not result.reset_token_expires or current_time > result.reset_token_expires:
             # 期限切れトークンをクリア
             db.execute(text("""
                 UPDATE users 
@@ -203,8 +206,10 @@ async def verify_reset_token(token: str, db: Session = Depends(get_db)):
             return {"valid": False, "message": "無効なトークンです"}
         
         # タイムゾーン対応の期限チェック
-        from datetime import datetime
-        if not result.reset_token_expires or datetime.now() > result.reset_token_expires:
+        from datetime import datetime, timezone
+        # UTCタイムゾーンを使用して比較
+        current_time = datetime.now(timezone.utc)
+        if not result.reset_token_expires or current_time > result.reset_token_expires:
             logger.warning(f"トークン期限切れ: expires_at={result.reset_token_expires}")
             # 期限切れトークンをクリア
             db.execute(text("""
