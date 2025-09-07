@@ -1066,16 +1066,42 @@ async def get_frame_image(frame_id: int, db: Session = Depends(get_db)):
     
     return FileResponse(actual_frame_path, media_type="image/jpeg")
 
+# フレームキャッシュ（メモリ内に保持）
+frame_cache = {}
+MAX_CACHE_SIZE = 100  # 最大100フレームをキャッシュ
+
 @router.get("/{video_id}/frame-at-time")
 async def get_frame_at_time(
     video_id: int,
     time_ms: int = Query(..., description="時刻（ミリ秒）"),
     db: Session = Depends(get_db)
 ):
-    """指定時刻のフレーム画像を取得（動画から直接抽出）"""
+    """指定時刻のフレーム画像を取得（キャッシュ付き高速版）"""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(404, "動画が見つかりません")
+    
+    # キャッシュキーを生成（33ms単位で丸める = 30fpsの1フレーム）
+    cache_time = (time_ms // 33) * 33
+    cache_key = f"{video_id}_{cache_time}"
+    
+    # キャッシュから取得を試みる
+    if cache_key in frame_cache:
+        logger.info(f"Frame cache hit for {cache_key}")
+        cached_data = frame_cache[cache_key]
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(
+            io.BytesIO(cached_data["data"]),
+            media_type="image/jpeg",
+            headers={
+                "X-Frame-Time": str(cached_data["actual_time"]),
+                "X-Requested-Time": str(time_ms),
+                "X-Cache": "HIT",
+                "Cache-Control": "public, max-age=3600"  # ブラウザキャッシュを有効化
+            }
+        )
+    
+    logger.info(f"Frame cache miss for {cache_key}")
     
     # Render環境での実際のファイルパス取得
     video_path = video.local_path
@@ -1091,7 +1117,7 @@ async def get_frame_at_time(
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
     # フレーム番号を計算 (最小値0、最大値はtotal_frames-1)
-    target_frame = max(0, min(int(time_ms * fps / 1000.0), total_frames - 1))
+    target_frame = max(0, min(int(cache_time * fps / 1000.0), total_frames - 1))
     cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
     
     ret, frame = cap.read()
@@ -1109,23 +1135,43 @@ async def get_frame_at_time(
     import io
     from PIL import Image
     
-    # BGRからRGBに変換
+    # BGRからRGBに変換（高速化のため品質を調整）
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     img = Image.fromarray(frame_rgb)
     
+    # サイズを縮小して処理速度向上（モーダルでは小さくても問題ない）
+    max_width = 800
+    if img.width > max_width:
+        ratio = max_width / img.width
+        new_size = (max_width, int(img.height * ratio))
+        img = img.resize(new_size, Image.LANCZOS)
+    
     # JPEGバッファを作成
     img_byte_arr = io.BytesIO()
-    img.save(img_byte_arr, format='JPEG', quality=85)
-    img_byte_arr.seek(0)
+    img.save(img_byte_arr, format='JPEG', quality=75)  # 品質を下げて高速化
+    img_data = img_byte_arr.getvalue()
+    
+    # キャッシュに保存（サイズ制限チェック）
+    if len(frame_cache) >= MAX_CACHE_SIZE:
+        # 最も古いエントリを削除（簡易的なLRU）
+        oldest_key = next(iter(frame_cache))
+        del frame_cache[oldest_key]
+    
+    frame_cache[cache_key] = {
+        "data": img_data,
+        "actual_time": actual_time_ms
+    }
     
     # StreamingResponseで画像を返す
     from fastapi.responses import StreamingResponse
     return StreamingResponse(
-        img_byte_arr, 
+        io.BytesIO(img_data), 
         media_type="image/jpeg",
         headers={
             "X-Frame-Time": str(actual_time_ms),
-            "X-Requested-Time": str(time_ms)
+            "X-Requested-Time": str(time_ms),
+            "X-Cache": "MISS",
+            "Cache-Control": "public, max-age=3600"  # ブラウザキャッシュを有効化
         }
     )
 
