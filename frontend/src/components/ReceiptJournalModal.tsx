@@ -255,16 +255,35 @@ export default function ReceiptJournalModal({
 
   // 現在フレームでOCR再分析（プレビュー）
   const handleReanalyzeFrame = async () => {
-    if (!videoId || !currentFrameTime) {
+    if (!videoId || !currentFrameTime || !hiddenVideoRef.current || !canvasRef.current) {
       toast.error('フレーム情報が不足しています')
       return
     }
 
     setIsAnalyzing(true)
     try {
-      // フレーム分析プレビューAPI呼び出し（保存しない）
-      const response = await api.post(`/videos/${videoId}/analyze-frame-preview`, null, {
-        params: { time_ms: currentFrameTime }
+      // Canvas でフレームをキャプチャ
+      const video = hiddenVideoRef.current
+      const canvas = canvasRef.current
+      const ctx = canvas.getContext('2d')
+      
+      if (!ctx) {
+        toast.error('キャンバスの初期化に失敗しました')
+        return
+      }
+
+      // ビデオフレームをキャンバスに描画
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      
+      // キャンバスをBase64画像に変換
+      const imageData = canvas.toDataURL('image/jpeg', 0.95)
+      
+      // Base64画像を使用してOCR分析
+      const response = await api.post(`/videos/${videoId}/analyze-image`, {
+        image_data: imageData,
+        time_ms: currentFrameTime
       })
       
       if (response.data.success && response.data.receipt_data) {

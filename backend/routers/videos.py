@@ -1303,6 +1303,67 @@ async def analyze_frame_preview(
         logger.error(f"Frame preview analysis error: {e}")
         raise HTTPException(500, f"分析に失敗しました: {str(e)}")
 
+@router.post("/{video_id}/analyze-image")
+async def analyze_image(
+    video_id: int,
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    """Base64画像データからOCR分析を実行（プレビューのみ）"""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(404, "動画が見つかりません")
+    
+    image_data = request.get('image_data')
+    time_ms = request.get('time_ms', 0)
+    
+    if not image_data:
+        raise HTTPException(400, "画像データが必要です")
+    
+    try:
+        import base64
+        import tempfile
+        from PIL import Image
+        from io import BytesIO
+        
+        # Base64データからヘッダー部分を削除
+        if ',' in image_data:
+            image_data = image_data.split(',')[1]
+        
+        # Base64をデコード
+        image_bytes = base64.b64decode(image_data)
+        
+        # 一時ファイルとして保存
+        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+            tmp.write(image_bytes)
+            temp_path = tmp.name
+        
+        try:
+            analyzer = VideoAnalyzer()
+            # OCR分析を実行（保存はしない）
+            receipt_data = await analyzer.extract_receipt_data(temp_path, '')
+            
+            if receipt_data:
+                return {
+                    "success": True,
+                    "receipt_data": receipt_data,
+                    "time_ms": time_ms
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "領収書データを抽出できませんでした",
+                    "time_ms": time_ms
+                }
+        finally:
+            # 一時ファイルのクリーンアップ
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+                
+    except Exception as e:
+        logger.error(f"Image analysis error: {e}")
+        raise HTTPException(500, f"画像分析に失敗しました: {str(e)}")
+
 @router.post("/{video_id}/analyze-frame")
 async def analyze_frame_at_time(
     video_id: int,
