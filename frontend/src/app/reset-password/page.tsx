@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
+import { API_BASE_URL } from '@/config/api'
 
 function ResetPasswordForm() {
   const [password, setPassword] = useState('')
@@ -28,7 +29,7 @@ function ResetPasswordForm() {
   const verifyToken = async () => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/api/auth/verify-reset-token?token=${token}`
+        `${API_BASE_URL}/api/auth/verify-reset-token?token=${token}`
       )
       const data = await response.json()
       
@@ -67,7 +68,7 @@ function ResetPasswordForm() {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/api/auth/reset-password`,
+        `${API_BASE_URL}/api/auth/reset-password`,
         {
           method: 'POST',
           headers: {

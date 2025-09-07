@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
+import { API_BASE_URL } from '@/config/api'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -20,11 +21,18 @@ export default function ForgotPasswordPage() {
       return
     }
 
+    // 基本的なメール形式検証
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      toast.error('有効なメールアドレスを入力してください')
+      return
+    }
+
     setIsLoading(true)
 
     try {
       // バックエンドAPIを呼び出す
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/api/auth/forgot-password`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
