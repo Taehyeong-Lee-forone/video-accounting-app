@@ -50,6 +50,10 @@ class User(Base):
     storage_quota_mb = Column(Integer, default=10000)  # デフォルト10GB
     storage_used_mb = Column(Float, default=0)
     
+    # パスワードリセット用
+    reset_token = Column(String(255), unique=True, index=True)
+    reset_token_expires = Column(DateTime(timezone=True))
+    
     # タイムスタンプ
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
