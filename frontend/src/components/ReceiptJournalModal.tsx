@@ -1230,7 +1230,7 @@ export default function ReceiptJournalModal({
                         <div className="absolute inset-0 bg-gradient-to-b from-white/25 to-transparent" />
                       </div>
                       
-                      {/* 領収書マーカー */}
+                      {/* 領収書マーカー - 強調版 */}
                       {localReceipts.map((r: any) => {
                         const position = Math.max(0, Math.min(100, ((r.best_frame?.time_ms || 0) / 1000 / videoDuration) * 100))
                         const isConfirmed = allJournals.find((j: any) => j.receipt_id === r.id)?.status === 'confirmed'
@@ -1246,25 +1246,43 @@ export default function ReceiptJournalModal({
                               handleReceiptNavigation(r.id)
                             }}
                           >
-                            {/* マーカー */}
-                            <div className={`absolute top-0 bottom-0 w-1 transition-all cursor-pointer hover:w-1.5 ${
+                            {/* マーカー本体 - より太く、影付き */}
+                            <div className={`absolute transition-all cursor-pointer ${
                               isCurrent 
-                                ? 'bg-yellow-500 z-20' 
+                                ? 'top-[-2px] bottom-[-2px] w-2 bg-yellow-400 shadow-lg shadow-yellow-400/50 z-30 hover:w-3' 
                                 : isConfirmed 
-                                ? 'bg-green-500/80 z-10' 
-                                : 'bg-gray-400/60 z-10'
+                                ? 'top-[-1px] bottom-[-1px] w-1.5 bg-green-500 shadow-md shadow-green-500/30 z-20 hover:w-2' 
+                                : 'top-0 bottom-0 w-1 bg-gray-500 shadow-sm z-10 hover:w-1.5'
                             }`} />
                             
-                            {/* ホバー時の情報 */}
-                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/marker:opacity-100 transition-all duration-200 pointer-events-none z-40">
-                              <div className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-xl whitespace-nowrap">
-                                <div className="font-semibold">{r.vendor || '領収書'}</div>
-                                <div className="text-blue-300 font-bold">¥{r.total?.toLocaleString()}</div>
-                                <div className="text-gray-400 text-[10px] mt-0.5">
+                            {/* マーカー上部のドット - タイムスタンプ強調 */}
+                            <div className={`absolute -top-1 left-1/2 -translate-x-1/2 ${
+                              isCurrent 
+                                ? 'w-3 h-3 bg-yellow-400 rounded-full shadow-lg shadow-yellow-400/50 z-30' 
+                                : isConfirmed 
+                                ? 'w-2.5 h-2.5 bg-green-500 rounded-full shadow-md shadow-green-500/30 z-20' 
+                                : 'w-2 h-2 bg-gray-500 rounded-full shadow-sm z-10'
+                            }`} />
+                            
+                            {/* マーカー下部のドット */}
+                            <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 ${
+                              isCurrent 
+                                ? 'w-3 h-3 bg-yellow-400 rounded-full shadow-lg shadow-yellow-400/50 z-30' 
+                                : isConfirmed 
+                                ? 'w-2.5 h-2.5 bg-green-500 rounded-full shadow-md shadow-green-500/30 z-20' 
+                                : 'w-2 h-2 bg-gray-500 rounded-full shadow-sm z-10'
+                            }`} />
+                            
+                            {/* ホバー時の情報 - より大きく */}
+                            <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 opacity-0 group-hover/marker:opacity-100 transition-all duration-200 pointer-events-none z-40">
+                              <div className="bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow-2xl whitespace-nowrap border border-gray-700">
+                                <div className="font-bold text-white">{r.vendor || '領収書'}</div>
+                                <div className="text-blue-300 font-bold text-base">¥{r.total?.toLocaleString()}</div>
+                                <div className="text-gray-400 text-xs mt-0.5">
                                   {Math.floor((r.best_frame?.time_ms || 0) / 1000 / 60)}:{(((r.best_frame?.time_ms || 0) / 1000) % 60).toFixed(0).padStart(2, '0')}
                                 </div>
                               </div>
-                              <div className="absolute w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-gray-900 left-1/2 -translate-x-1/2 -bottom-1" />
+                              <div className="absolute w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900 left-1/2 -translate-x-1/2 -bottom-[5px]" />
                             </div>
                           </div>
                         )
