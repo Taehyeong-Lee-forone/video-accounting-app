@@ -139,11 +139,18 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS設定 - 開発中は全オリジンを許可
-# 本番環境では特定のドメインのみ許可すること
+# CORS設定 - 特定のオリジンのみ許可
+origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://video-accounting-app.vercel.app",
+    "https://video-accounting-app-git-main-taehyeong-lee-forones-projects.vercel.app",
+    "https://video-accounting-app-taehyeong-lee-forones-projects.vercel.app",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # すべてのオリジンを許可（開発用）
+    allow_origins=origins,  # 特定のオリジンのみ許可
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
